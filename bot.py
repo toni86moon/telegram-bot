@@ -9,7 +9,7 @@ from flask import Flask
 import threading
 from telegram import Update
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes
+    Application, CommandHandler, ContextTypes, MessageHandler, filters
 )
 from telegram.error import Conflict
 
@@ -33,6 +33,7 @@ def init_db():
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME")
         )
+        print("Connessione al database riuscita!")  # Log per diagnosticare
         cursor = conn.cursor()
         
         # Crea le tabelle se non esistono
@@ -43,7 +44,6 @@ def init_db():
             punti INT DEFAULT 0
         )
         """)
-        
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS missioni (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -52,7 +52,6 @@ def init_db():
             attiva TINYINT DEFAULT 1
         )
         """)
-        
         conn.commit()
         return conn, cursor
 
@@ -63,26 +62,39 @@ def init_db():
 conn, cursor = init_db()
 
 # --- FUNZIONI ---
+async def log_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Log degli aggiornamenti ricevuti dal bot, utile per diagnosticare problemi."""
+    print(f"Aggiornamento ricevuto: {update}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    cursor.execute(
-        "INSERT IGNORE INTO utenti (telegram_id) VALUES (%s)",
-        (user_id,)
-    )
-    conn.commit()
-    await update.message.reply_text("Benvenuto! Usa /missioni per vedere le missioni disponibili.")
+    try:
+        cursor.execute(
+            "INSERT IGNORE INTO utenti (telegram_id) VALUES (%s)",
+            (user_id,)
+        )
+        conn.commit()
+        print(f"Utente {user_id} aggiunto al database.")  # Log per debug
+        await update.message.reply_text("Benvenuto! Usa /missioni per vedere le missioni disponibili.")
+    except Error as e:
+        print(f"Errore durante l'aggiunta dell'utente: {e}")
+        await update.message.reply_text("❌ Errore durante l'aggiunta dell'utente al database.")
 
 async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cursor.execute("SELECT id, tipo, url FROM missioni WHERE attiva = 1")
-    missioni_attive = cursor.fetchall()
-    if not missioni_attive:
-        await update.message.reply_text("Al momento non ci sono missioni attive.")
-        return
+    try:
+        cursor.execute("SELECT id, tipo, url FROM missioni WHERE attiva = 1")
+        missioni_attive = cursor.fetchall()
+        if not missioni_attive:
+            await update.message.reply_text("Al momento non ci sono missioni attive.")
+            return
 
-    messaggio = "🎯 Missioni disponibili:\n"
-    for mid, tipo, url in missioni_attive:
-        messaggio += f"\n🆔 ID: {mid}\n📌 Tipo: {tipo}\n🔗 URL: {url}\n"
-    await update.message.reply_text(messaggio)
+        messaggio = "🎯 Missioni disponibili:\n"
+        for mid, tipo, url in missioni_attive:
+            messaggio += f"\n🆔 ID: {mid}\n📌 Tipo: {tipo}\n🔗 URL: {url}\n"
+        await update.message.reply_text(messaggio)
+    except Error as e:
+        print(f"Errore durante il recupero delle missioni: {e}")
+        await update.message.reply_text("❌ Errore durante il recupero delle missioni.")
 
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
@@ -90,16 +102,23 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text("⚠️ Formato non valido. Usa: /crea_missione <tipo> <url>")
+        await update.message.reply_text(
+            "⚠️ Formato non valido. Usa: /crea_missione <tipo> <url>\n"
+            "Esempio: /crea_missione Like https://instagram.com/post"
+        )
         return
 
     tipo, url = context.args[0], context.args[1]
-    cursor.execute(
-        "INSERT INTO missioni (tipo, url, attiva) VALUES (%s, %s, %s)",
-        (tipo, url, True)
-    )
-    conn.commit()
-    await update.message.reply_text(f"✅ Missione creata con successo!\n📌 Tipo: {tipo}\n🔗 URL: {url}")
+    try:
+        query = "INSERT INTO missioni (tipo, url, attiva) VALUES (%s, %s, %s)"
+        print(f"Eseguendo query: {query} con valori: Tipo={tipo}, URL={url}, Attiva=True")  # Log per debug
+        cursor.execute(query, (tipo, url, True))
+        conn.commit()
+        print(f"Missione creata: Tipo={tipo}, URL={url}")  # Log per debug
+        await update.message.reply_text(f"✅ Missione creata con successo!\n📌 Tipo: {tipo}\n🔗 URL: {url}")
+    except Error as e:
+        print(f"Errore durante la creazione della missione: {e}")
+        await update.message.reply_text("❌ Errore durante la creazione della missione.")
 
 # --- AVVIO BOT ---
 async def main():
@@ -107,9 +126,11 @@ async def main():
         app = Application.builder().token(BOT_TOKEN).build()
         await app.bot.delete_webhook(drop_pending_updates=True)
 
+        # Aggiungi handler
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("missioni", missioni))
         app.add_handler(CommandHandler("crea_missione", crea_missione))
+        app.add_handler(MessageHandler(filters.ALL, log_update))  # Per loggare tutti gli aggiornamenti
 
         await app.initialize()
         await app.start()

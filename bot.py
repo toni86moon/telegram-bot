@@ -50,6 +50,35 @@ def init_db():
 
 conn, cursor = init_db()
 
+# --- NUOVO COMANDO: Creazione di Missioni ---
+async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Verifica che solo l'amministratore possa creare missioni
+    if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
+        await update.message.reply_text("⚠️ Solo l'amministratore può creare nuove missioni.")
+        return
+
+    # Controlla che siano stati forniti i parametri necessari
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ Formato non valido. Usa: /crea_missione <tipo> <url>\n"
+            "Esempio: /crea_missione Like https://instagram.com/post"
+        )
+        return
+
+    # Recupera i parametri dal comando
+    tipo = context.args[0]
+    url = context.args[1]
+
+    # Inserisce la missione nel database
+    cursor.execute(
+        "INSERT INTO missioni (tipo, url, attiva) VALUES (?, ?, 1)",
+        (tipo, url)
+    )
+    conn.commit()
+
+    # Conferma all'amministratore che la missione è stata creata
+    await update.message.reply_text(f"✅ Missione creata con successo!\n📌 Tipo: {tipo}\n🔗 URL: {url}")
+
 # --- FUNZIONI ---
 def genera_codice_sconto(percentuale: int = 10) -> str:
     codice = "ENGAGE" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -72,20 +101,6 @@ def genera_codice_sconto(percentuale: int = 10) -> str:
     except requests.exceptions.RequestException as e:
         print(f"Errore durante la richiesta API WooCommerce: {e}")
         return None
-
-# --- NUOVA FUNZIONE: Verifica iscrizione al canale ---
-async def verifica_iscrizione_canale(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    try:
-        user_id = update.effective_user.id
-        member = await context.bot.get_chat_member(CANAL_TELEGRAM_ID, user_id)
-        if member.status in ['member', 'administrator', 'creator']:
-            return True
-        else:
-            await update.message.reply_text(f"Per partecipare alle missioni, devi essere iscritto al nostro canale Telegram: {CANAL_TELEGRAM_ID}")
-            return False
-    except Exception as e:
-        await update.message.reply_text(f"Errore durante il controllo dell'iscrizione al canale: {str(e)}")
-        return False
 
 # --- COMANDI BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,9 +130,13 @@ async def main():
         # Crea l'applicazione Telegram
         app = Application.builder().token(BOT_TOKEN).build()
 
+        # Elimina eventuali webhook esistenti
+        await app.bot.delete_webhook(drop_pending_updates=True)
+
         # Aggiungi handler
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("missioni", missioni))
+        app.add_handler(CommandHandler("crea_missione", crea_missione))
 
         # Avvia il bot in modalità polling
         await app.initialize()

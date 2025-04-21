@@ -13,11 +13,15 @@ from telegram.ext import (
 
 # --- COSTANTI ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Variabile d'ambiente per il token del bot
-WOOCOMMERCE_API_URL = "https://example.com/wp-json/wc/v3/"
-WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")  # Variabile d'ambiente per la chiave WooCommerce
-WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")  # Variabile d'ambiente per il segreto WooCommerce
-TUO_TELEGRAM_ID_ADMIN = os.getenv("TUO_TELEGRAM_ID_ADMIN")  # Variabile d'ambiente per ID admin
-CANAL_TELEGRAM_ID = "@ornoirsmart"
+WOOCOMMERCE_API_URL = os.getenv("WOOCOMMERCE_API_URL")  # URL WooCommerce dal file .env
+WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")  # Chiave WooCommerce
+WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")  # Segreto WooCommerce
+TUO_TELEGRAM_ID_ADMIN = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0"))  # ID admin Telegram
+CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID")  # ID del canale Telegram
+
+# Verifica che le variabili essenziali siano state caricate
+if not all([BOT_TOKEN, WOOCOMMERCE_API_URL, WOOCOMMERCE_KEY, WOOCOMMERCE_SECRET, CANAL_TELEGRAM_ID]):
+    raise ValueError("Errore: Assicurati che tutte le variabili d'ambiente essenziali siano configurate (BOT_TOKEN, WOOCOMMERCE_API_URL, ecc.).")
 
 # --- DATABASE ---
 def init_db():
@@ -146,12 +150,11 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stato = "✅ Attiva" if attiva else "⛔ Disattivata"
         messaggio += f"\nID: {mid}\nTipo: {tipo}\nURL: {url}\nStato: {stato}\n"
     await update.message.reply_text(messaggio)
-    if context.args and context.args[0] == "notifica":
-        await notifica_nuova_missione(context.bot, "🚀 È stata lanciata una nuova missione! Usa /missioni per scoprirla!")
 
 # --- AVVIO BOT ---
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
+    INSERISCI_USERNAME_IG = range(1)  # Definizione della variabile mancata
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start), CommandHandler("instagram", aggiorna_ig)],
         states={INSERISCI_USERNAME_IG: [MessageHandler(filters.TEXT & ~filters.COMMAND, inserisci_username_ig)]},

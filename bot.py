@@ -1,4 +1,4 @@
-import asyncio  # ✅ IMPORTATO QUI IN ALTO
+import asyncio
 import sqlite3
 import requests
 import random
@@ -13,7 +13,7 @@ from telegram.ext import (
 
 # --- COSTANTI ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Variabile d'ambiente per il token del bot
-WOOCOMMERCE_API_URL = os.getenv("WOOCOMMERCE_API_URL")  # URL WooCommerce dal file .env
+WOOCOMMERCE_API_URL = os.getenv("WOOCOMMERCE_API_URL")  # URL WooCommerce
 WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")  # Chiave WooCommerce
 WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")  # Segreto WooCommerce
 TUO_TELEGRAM_ID_ADMIN = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0"))  # ID admin Telegram
@@ -116,11 +116,18 @@ async def main():
     app.add_handler(CommandHandler("missioni", missioni))
 
     # Avvia il bot in modalità polling
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    # Mantieni il bot attivo
+    await asyncio.Event().wait()
 
 # --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
-    asyncio.run(main())  # Non chiude il ciclo di eventi automaticamente
+    try:
+        asyncio.run(main())  # Usa asyncio.run solo quando l'event loop non è già in esecuzione
+    except RuntimeError as e:
+        print(f"Errore nel ciclo di eventi: {e}")
 
 
 

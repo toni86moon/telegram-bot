@@ -1,3 +1,17 @@
+# Libreria per creare e gestire bot Telegram
 python-telegram-bot==20.1
+
+# Libreria per effettuare richieste HTTP
 requests==2.28.2
-instaloader
+
+# Libreria per interagire con Instagram
+instaloader==4.9.6
+
+# Libreria per gestire variabili d'ambiente tramite file .env
+python-dotenv==1.0.0
+
+# Driver per connettersi a database MySQL
+mysql-connector-python==8.0.33
+
+# Libreria opzionale per facilitare query asincrone su MySQL (se necessario)
+aiomysql==0.1.1

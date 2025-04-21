@@ -5,6 +5,8 @@ import random
 import string
 import instaloader
 import os  # Nuovo per le variabili d'ambiente
+from flask import Flask
+import threading
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, ContextTypes, MessageHandler,
@@ -134,14 +136,28 @@ async def main():
         print("Si è verificato un errore imprevisto.")
         print(f"Dettagli dell'errore: {e}")
 
+# --- SERVER FLASK ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Il bot è attivo e in esecuzione."
+
+def run_flask():
+    app.run(host='0.0.0.0', port=5000)  # Porta richiesta da Render
+
 # --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
+    # Avvia Flask in un thread separato
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
     try:
         asyncio.run(main())  # Usa asyncio.run solo quando l'event loop non è già in esecuzione
     except RuntimeError as e:
         print("Errore nel ciclo di eventi: forse il loop è già in esecuzione.")
         print(f"Dettagli dell'errore: {e}")
-
 
 
 

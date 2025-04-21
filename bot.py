@@ -4,27 +4,26 @@ import requests
 import random
 import string
 import instaloader
-import os  # Nuovo per le variabili d'ambiente
+import os
 from flask import Flask
 import threading
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes, MessageHandler,
-    filters, ConversationHandler
+    Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler,
+    filters
 )
-from telegram.error import Conflict  # Importato per gestire errori di conflitto
+from telegram.error import Conflict
 
 # --- COSTANTI ---
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Variabile d'ambiente per il token del bot
-WOOCOMMERCE_API_URL = os.getenv("WOOCOMMERCE_API_URL")  # URL WooCommerce
-WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")  # Chiave WooCommerce
-WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")  # Segreto WooCommerce
-TUO_TELEGRAM_ID_ADMIN = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0"))  # ID admin Telegram
-CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID")  # ID del canale Telegram
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WOOCOMMERCE_API_URL = os.getenv("WOOCOMMERCE_API_URL")
+WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")
+WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")
+TUO_TELEGRAM_ID_ADMIN = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0"))
+CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID")
 
-# Verifica che le variabili essenziali siano state caricate
 if not all([BOT_TOKEN, WOOCOMMERCE_API_URL, WOOCOMMERCE_KEY, WOOCOMMERCE_SECRET, CANAL_TELEGRAM_ID]):
-    raise ValueError("Errore: Assicurati che tutte le variabili d'ambiente essenziali siano configurate (BOT_TOKEN, WOOCOMMERCE_API_URL, ecc.).")
+    raise ValueError("Errore: Assicurati che tutte le variabili d'ambiente siano configurate.")
 
 # --- DATABASE ---
 def init_db():
@@ -50,35 +49,6 @@ def init_db():
 
 conn, cursor = init_db()
 
-# --- NUOVO COMANDO: Creazione di Missioni ---
-async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Verifica che solo l'amministratore possa creare missioni
-    if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
-        await update.message.reply_text("⚠️ Solo l'amministratore può creare nuove missioni.")
-        return
-
-    # Controlla che siano stati forniti i parametri necessari
-    if len(context.args) < 2:
-        await update.message.reply_text(
-            "⚠️ Formato non valido. Usa: /crea_missione <tipo> <url>\n"
-            "Esempio: /crea_missione Like https://instagram.com/post"
-        )
-        return
-
-    # Recupera i parametri dal comando
-    tipo = context.args[0]
-    url = context.args[1]
-
-    # Inserisce la missione nel database
-    cursor.execute(
-        "INSERT INTO missioni (tipo, url, attiva) VALUES (?, ?, 1)",
-        (tipo, url)
-    )
-    conn.commit()
-
-    # Conferma all'amministratore che la missione è stata creata
-    await update.message.reply_text(f"✅ Missione creata con successo!\n📌 Tipo: {tipo}\n🔗 URL: {url}")
-
 # --- FUNZIONI ---
 def genera_codice_sconto(percentuale: int = 10) -> str:
     codice = "ENGAGE" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -102,6 +72,15 @@ def genera_codice_sconto(percentuale: int = 10) -> str:
         print(f"Errore durante la richiesta API WooCommerce: {e}")
         return None
 
+async def verifica_iscrizione_canale(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        user_id = update.effective_user.id
+        chat_member = await context.bot.get_chat_member(chat_id=CANAL_TELEGRAM_ID, user_id=user_id)
+        return chat_member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        print(f"Errore durante la verifica dell'iscrizione al canale: {e}")
+        return False
+
 # --- COMANDI BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -112,6 +91,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_iscritto = await verifica_iscrizione_canale(update, context)
     if not is_iscritto:
+        await update.message.reply_text("Devi iscriverti al canale per accedere alle missioni!")
         return
     
     cursor.execute("SELECT id, tipo, url FROM missioni WHERE attiva = 1")
@@ -119,41 +99,74 @@ async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not missioni_attive:
         await update.message.reply_text("Al momento non ci sono missioni attive.")
         return
+
     messaggio = "🎯 Missioni disponibili:\n"
     for mid, tipo, url in missioni_attive:
         messaggio += f"\n🆔 ID: {mid}\n📌 Tipo: {tipo}\n🔗 URL: {url}\n"
     await update.message.reply_text(messaggio)
 
+async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
+        await update.message.reply_text("⚠️ Solo l'amministratore può creare nuove missioni.")
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "⚠️ Formato non valido. Usa: /crea_missione <tipo> <url>\n"
+            "Esempio: /crea_missione Like https://instagram.com/post"
+        )
+        return
+
+    tipo, url = context.args[0], context.args[1]
+    try:
+        cursor.execute(
+            "INSERT INTO missioni (tipo, url, attiva) VALUES (?, ?, 1)",
+            (tipo, url)
+        )
+        conn.commit()
+        await update.message.reply_text(f"✅ Missione creata con successo!\n📌 Tipo: {tipo}\n🔗 URL: {url}")
+    except Exception as e:
+        print(f"Errore durante la creazione della missione: {e}")
+        await update.message.reply_text("❌ Errore durante la creazione della missione.")
+
+async def elimina_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
+        await update.message.reply_text("⚠️ Solo l'amministratore può eliminare missioni.")
+        return
+
+    if len(context.args) < 1:
+        await update.message.reply_text("⚠️ Usa: /elimina_missione <ID>")
+        return
+
+    missione_id = context.args[0]
+    try:
+        cursor.execute("DELETE FROM missioni WHERE id = ?", (missione_id,))
+        conn.commit()
+        await update.message.reply_text(f"✅ Missione {missione_id} eliminata con successo.")
+    except Exception as e:
+        print(f"Errore durante l'eliminazione della missione: {e}")
+        await update.message.reply_text("❌ Errore durante l'eliminazione della missione.")
+
 # --- AVVIO BOT ---
 async def main():
     try:
-        # Crea l'applicazione Telegram
         app = Application.builder().token(BOT_TOKEN).build()
-
-        # Elimina eventuali webhook esistenti
         await app.bot.delete_webhook(drop_pending_updates=True)
 
-        # Aggiungi handler
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("missioni", missioni))
         app.add_handler(CommandHandler("crea_missione", crea_missione))
+        app.add_handler(CommandHandler("elimina_missione", elimina_missione))
 
-        # Avvia il bot in modalità polling
         await app.initialize()
         await app.start()
         await app.updater.start_polling()
-        # Mantieni il bot attivo
         await asyncio.Event().wait()
 
     except Conflict as e:
-        # Gestione dell'errore di conflitto
-        print("Errore: un'altra istanza del bot è già in esecuzione.")
-        print(f"Dettagli dell'errore: {e}")
-
+        print(f"Errore: {e}")
     except Exception as e:
-        # Gestione di errori generici
-        print("Si è verificato un errore imprevisto.")
-        print(f"Dettagli dell'errore: {e}")
+        print(f"Errore generale: {e}")
 
 # --- SERVER FLASK ---
 app = Flask(__name__)
@@ -163,20 +176,14 @@ def home():
     return "Il bot è attivo e in esecuzione."
 
 def run_flask():
-    app.run(host='0.0.0.0', port=5000)  # Porta richiesta da Render
+    app.run(host='0.0.0.0', port=5000)
 
-# --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
-    # Avvia Flask in un thread separato
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
 
-    try:
-        asyncio.run(main())  # Usa asyncio.run solo quando l'event loop non è già in esecuzione
-    except RuntimeError as e:
-        print("Errore nel ciclo di eventi: forse il loop è già in esecuzione.")
-        print(f"Dettagli dell'errore: {e}")
+    asyncio.run(main())
 
 
 

@@ -70,17 +70,6 @@ def genera_codice_sconto(percentuale: int = 10) -> str:
         print(f"Errore durante la richiesta API WooCommerce: {e}")
         return None
 
-def verifica_interazione(username: str, url: str, tipo: str) -> bool:
-    L = instaloader.Instaloader()
-    try:
-        profile = instaloader.Profile.from_username(L.context, username)
-        for post in profile.get_posts():
-            if url in post.url:
-                return True
-    except Exception as e:
-        print(f"Errore verifica IG per {username}: {e}")
-    return False
-
 # --- NUOVA FUNZIONE: Verifica iscrizione al canale ---
 async def verifica_iscrizione_canale(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
@@ -102,18 +91,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
     await update.message.reply_text("Benvenuto! Usa /missioni per vedere le missioni disponibili oppure aggiorna il tuo profilo con /instagram.")
 
-async def aggiorna_ig(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Inserisci il tuo username Instagram:")
-    return INSERISCI_USERNAME_IG
-
-async def inserisci_username_ig(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.message.text.strip().lstrip("@").lower()
-    user_id = update.effective_user.id
-    cursor.execute("UPDATE utenti SET username_instagram = ? WHERE telegram_id = ?", (username, user_id))
-    conn.commit()
-    await update.message.reply_text(f"Username Instagram aggiornato con successo: {username}")
-    return ConversationHandler.END
-
 async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_iscritto = await verifica_iscrizione_canale(update, context)
     if not is_iscritto:
@@ -129,49 +106,21 @@ async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
         messaggio += f"\n🆔 ID: {mid}\n📌 Tipo: {tipo}\n🔗 URL: {url}\n"
     await update.message.reply_text(messaggio)
 
-async def profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    cursor.execute("SELECT username_instagram, punti FROM utenti WHERE telegram_id = ?", (user_id,))
-    utente = cursor.fetchone()
-    if not utente:
-        await update.message.reply_text("Profilo non trovato.")
-        return
-    username, punti = utente
-    await update.message.reply_text(f"👤 Username IG: {username or 'Non impostato'}\n⭐️ Punti: {punti}")
-
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != TUO_TELEGRAM_ID_ADMIN:
-        await update.message.reply_text("Accesso negato.")
-        return
-    cursor.execute("SELECT id, tipo, url, attiva FROM missioni")
-    missioni = cursor.fetchall()
-    messaggio = "📊 Pannello Admin - Missioni:\n"
-    for mid, tipo, url, attiva in missioni:
-        stato = "✅ Attiva" if attiva else "⛔ Disattivata"
-        messaggio += f"\nID: {mid}\nTipo: {tipo}\nURL: {url}\nStato: {stato}\n"
-    await update.message.reply_text(messaggio)
-
 # --- AVVIO BOT ---
 async def main():
+    # Crea l'applicazione Telegram
     app = Application.builder().token(BOT_TOKEN).build()
-    INSERISCI_USERNAME_IG = range(1)  # Definizione della variabile mancata
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("instagram", aggiorna_ig)],
-        states={INSERISCI_USERNAME_IG: [MessageHandler(filters.TEXT & ~filters.COMMAND, inserisci_username_ig)]},
-        fallbacks=[]
-    )
-    app.add_handler(conv_handler)
+
+    # Aggiungi handler
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("missioni", missioni))
-    app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(CommandHandler("profilo", profilo))
+
+    # Avvia il bot in modalità polling
     await app.run_polling()
 
 # --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        print(f"Errore nel ciclo di eventi: {e}")
+    asyncio.run(main())  # Non chiude il ciclo di eventi automaticamente
 
 
 

@@ -4,6 +4,7 @@ import requests
 import random
 import string
 import instaloader
+import os  # Nuovo per le variabili d'ambiente
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, ContextTypes, MessageHandler,
@@ -11,33 +12,36 @@ from telegram.ext import (
 )
 
 # --- COSTANTI ---
-BOT_TOKEN = "7680191017:AAHZEmD-74BIlK44JYa5O_2K3h0XVaEZZJE"
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Variabile d'ambiente per il token del bot
 WOOCOMMERCE_API_URL = "https://example.com/wp-json/wc/v3/"
-WOOCOMMERCE_KEY = "ck_0b35ae594925fa35435485fdaa84282698241855"
-WOOCOMMERCE_SECRET = "cs_3fc4a9e9deed68036a1f5f2f06046a73a75fd2ce"
-TUO_TELEGRAM_ID_ADMIN = "Udispay"
-INSERISCI_USERNAME_IG = "mordiamo"
+WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")  # Variabile d'ambiente per la chiave WooCommerce
+WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")  # Variabile d'ambiente per il segreto WooCommerce
+TUO_TELEGRAM_ID_ADMIN = os.getenv("TUO_TELEGRAM_ID_ADMIN")  # Variabile d'ambiente per ID admin
 CANAL_TELEGRAM_ID = "@ornoirsmart"
 
 # --- DATABASE ---
-conn = sqlite3.connect("utenti.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS utenti (
-    telegram_id INTEGER PRIMARY KEY,
-    username_instagram TEXT,
-    punti INTEGER DEFAULT 0
-)
-""")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS missioni (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tipo TEXT,
-    url TEXT,
-    attiva INTEGER DEFAULT 1
-)
-""")
-conn.commit()
+def init_db():
+    conn = sqlite3.connect("utenti.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS utenti (
+        telegram_id INTEGER PRIMARY KEY,
+        username_instagram TEXT,
+        punti INTEGER DEFAULT 0
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS missioni (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT,
+        url TEXT,
+        attiva INTEGER DEFAULT 1
+    )
+    """)
+    conn.commit()
+    return conn, cursor
+
+conn, cursor = init_db()
 
 # --- FUNZIONI ---
 def genera_codice_sconto(percentuale: int = 10) -> str:
@@ -75,8 +79,8 @@ def verifica_interazione(username: str, url: str, tipo: str) -> bool:
 
 # --- NUOVA FUNZIONE: Verifica iscrizione al canale ---
 async def verifica_iscrizione_canale(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
     try:
+        user_id = update.effective_user.id
         member = await context.bot.get_chat_member(CANAL_TELEGRAM_ID, user_id)
         if member.status in ['member', 'administrator', 'creator']:
             return True
@@ -84,8 +88,7 @@ async def verifica_iscrizione_canale(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(f"Per partecipare alle missioni, devi essere iscritto al nostro canale Telegram: {CANAL_TELEGRAM_ID}")
             return False
     except Exception as e:
-        print(f"Errore durante il controllo dell'iscrizione al canale: {e}")
-        await update.message.reply_text(f"Non riesco a verificare la tua iscrizione al canale. Assicurati di essere membro di {CANAL_TELEGRAM_ID}.")
+        await update.message.reply_text(f"Errore durante il controllo dell'iscrizione al canale: {str(e)}")
         return False
 
 # --- COMANDI BOT ---
@@ -163,13 +166,10 @@ async def main():
 # --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(main())
-        else:
-            loop.run_until_complete(main())
+        asyncio.run(main())
     except RuntimeError as e:
         print(f"Errore nel ciclo di eventi: {e}")
+
 
 
 

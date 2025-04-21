@@ -10,6 +10,7 @@ from telegram.ext import (
     Application, CommandHandler, ContextTypes, MessageHandler,
     filters, ConversationHandler
 )
+from telegram.error import Conflict  # Importato per gestire errori di conflitto
 
 # --- COSTANTI ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Variabile d'ambiente per il token del bot
@@ -108,26 +109,38 @@ async def missioni(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- AVVIO BOT ---
 async def main():
-    # Crea l'applicazione Telegram
-    app = Application.builder().token(BOT_TOKEN).build()
+    try:
+        # Crea l'applicazione Telegram
+        app = Application.builder().token(BOT_TOKEN).build()
 
-    # Aggiungi handler
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("missioni", missioni))
+        # Aggiungi handler
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("missioni", missioni))
 
-    # Avvia il bot in modalità polling
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    # Mantieni il bot attivo
-    await asyncio.Event().wait()
+        # Avvia il bot in modalità polling
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        # Mantieni il bot attivo
+        await asyncio.Event().wait()
+
+    except Conflict as e:
+        # Gestione dell'errore di conflitto
+        print("Errore: un'altra istanza del bot è già in esecuzione.")
+        print(f"Dettagli dell'errore: {e}")
+
+    except Exception as e:
+        # Gestione di errori generici
+        print("Si è verificato un errore imprevisto.")
+        print(f"Dettagli dell'errore: {e}")
 
 # --- BLOCCO DI AVVIO ---
 if __name__ == "__main__":
     try:
         asyncio.run(main())  # Usa asyncio.run solo quando l'event loop non è già in esecuzione
     except RuntimeError as e:
-        print(f"Errore nel ciclo di eventi: {e}")
+        print("Errore nel ciclo di eventi: forse il loop è già in esecuzione.")
+        print(f"Dettagli dell'errore: {e}")
 
 
 

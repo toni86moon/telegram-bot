@@ -17,4 +17,4 @@ asyncpg==0.27.0
 Flask==2.3.2
 
 #libreria DB
-supabase-py
+supabase

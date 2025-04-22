@@ -33,16 +33,9 @@ def webhook():
                 print("⚠️ Nessun dato ricevuto nell'aggiornamento.")
                 return "Bad Request", 400
 
+            print(f"📩 Dati aggiornamento ricevuti: {update_data}")  # Log dettagliato dei dati ricevuti
             update = Update.de_json(update_data, telegram_app.bot)
-            print(f"✅ Aggiornamento ricevuto: {update.to_dict()}")  # Log dell'aggiornamento
-
-            # Log aggiuntivi per tipo di aggiornamento
-            if update.message:
-                print(f"📩 Messaggio ricevuto: {update.message.text}")
-            elif update.callback_query:
-                print(f"🔘 Callback query ricevuta: {update.callback_query.data}")
-            else:
-                print("🔄 Tipo di aggiornamento non gestito.")
+            print(f"✅ Oggetto aggiornamento de-serializzato: {update.to_dict()}")  # Log dell'oggetto aggiornamento
 
             # Avvia un thread separato per processare l'aggiornamento
             from threading import Thread
@@ -55,23 +48,38 @@ def webhook():
 # --- FUNZIONI DEL BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce il comando /start."""
-    await update.message.reply_text("Ciao! Sono attivo e pronto ad aiutarti.")
+    try:
+        print("📢 Comando /start ricevuto")  # Log del comando ricevuto
+        await update.message.reply_text("Ciao! Sono attivo e pronto ad aiutarti.")
+    except Exception as e:
+        print(f"❌ Errore durante l'invio del messaggio /start: {e}")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce il comando /help."""
-    await update.message.reply_text("Ecco i comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo messaggio")
+    try:
+        print("📢 Comando /help ricevuto")  # Log del comando ricevuto
+        await update.message.reply_text("Ecco i comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo messaggio")
+    except Exception as e:
+        print(f"❌ Errore durante l'invio del messaggio /help: {e}")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Risponde ai messaggi di testo generici."""
-    user_message = update.message.text.strip()
-    if not user_message:
-        await update.message.reply_text("Non ho capito il tuo messaggio. Prova a scrivere qualcosa!")
-    else:
-        await update.message.reply_text(f"Hai detto: {user_message}")
+    try:
+        user_message = update.message.text.strip()
+        if not user_message:
+            await update.message.reply_text("Non ho capito il tuo messaggio. Prova a scrivere qualcosa!")
+        else:
+            await update.message.reply_text(f"Hai detto: {user_message}")
+    except Exception as e:
+        print(f"❌ Errore durante l'invio della risposta: {e}")
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Risponde ai comandi sconosciuti."""
-    await update.message.reply_text("Mi dispiace, non riconosco questo comando. Usa /help per vedere i comandi disponibili.")
+    try:
+        print(f"❓ Comando sconosciuto ricevuto: {update.message.text}")  # Log del comando sconosciuto
+        await update.message.reply_text("Mi dispiace, non riconosco questo comando. Usa /help per vedere i comandi disponibili.")
+    except Exception as e:
+        print(f"❌ Errore durante l'invio della risposta per comando sconosciuto: {e}")
 
 # --- GESTIONE ERRORI ---
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

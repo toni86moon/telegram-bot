@@ -11,6 +11,7 @@ from telegram.ext import (
     filters
 )
 from supabase import create_client, Client
+from difflib import get_close_matches  # Per suggerire comandi simili
 
 # --- LOGGING ---
 logging.basicConfig(
@@ -23,7 +24,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
-ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")  # Aggiunto controllo ADMIN_USER_ID
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
 if not BOT_TOKEN:
     raise ValueError("❌ Variabile d'ambiente BOT_TOKEN mancante.")
@@ -32,7 +33,7 @@ if not WEBHOOK_URL:
 if not SUPABASE_URL or not SUPABASE_API_KEY:
     raise ValueError("❌ Variabili d'ambiente per Supabase mancanti.")
 if not ADMIN_USER_ID:
-    raise ValueError("❌ Variabile d'ambiente ADMIN_USER_ID mancante.")  # Verifica variabile ADMIN_USER_ID
+    raise ValueError("❌ Variabile d'ambiente ADMIN_USER_ID mancante.")
 
 # --- INIZIALIZZAZIONE SUPABASE ---
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
@@ -56,15 +57,20 @@ def webhook():
         update = Update.de_json(update_data, telegram_app.bot)
         logging.info(f"📨 Update ricevuto: {update_data}")
 
-        asyncio.run_coroutine_threadsafe(
-            telegram_app.process_update(update),
-            telegram_app.loop
-        )
+        # Utilizza asyncio.create_task per eseguire process_update
+        asyncio.create_task(telegram_app.process_update(update))
 
         return "OK", 200
     except Exception as e:
         logging.error(f"❌ Errore nel webhook: {e}")
         return "Internal Server Error", 500
+
+# --- FUNZIONI DI SUPPORTO ---
+def suggest_command(user_message):
+    """Suggerisce un comando simile."""
+    commands = ["/start", "/help", "/crea_missione"]
+    suggestion = get_close_matches(user_message, commands, n=1)
+    return suggestion[0] if suggestion else None
 
 # --- HANDLER --- 
 
@@ -87,16 +93,17 @@ async def register_user(telegram_id, username_instagram):
 async def create_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == int(ADMIN_USER_ID):  # Controlla se è l'amministratore
         try:
-            args = context.args
+            args = update.message.text.split(maxsplit=2)[1:]  # Ignora il comando stesso
             if len(args) < 2:
                 await update.message.reply_text("⚠️ Sintassi non corretta! Usa /crea_missione <tipo> <url>\nEsempio: /crea_missione follow https://instagram.com/example")
                 return
+
             mission_type, mission_url = args
             supabase.table('missioni').insert({
                 'tipo': mission_type,
                 'url': mission_url
             }).execute()
-            await update.message.reply_text(f"✅ Missione {mission_type} creata con successo!")
+            await update.message.reply_text(f"✅ Missione '{mission_type}' creata con successo!")
         except Exception as e:
             logging.error(f"❌ Errore durante la creazione della missione: {e}")
             await update.message.reply_text("❌ Si è verificato un errore durante la creazione della missione.")
@@ -114,7 +121,7 @@ async def log_activity(telegram_id, evento, descrizione):
     except Exception as e:
         logging.error(f"❌ Errore durante il log dell'attività: {e}")
 
-# Funzione per verificare la missione con Instaloader
+# Funzione per verificare la missione (placeholder)
 async def check_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚧 Funzione di verifica missioni non ancora implementata.")
 
@@ -129,7 +136,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Comandi disponibili:\n/start\n/help\n/crea_missione")
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Comando non riconosciuto. Usa /help.")
+    user_message = update.message.text
+    if user_message.startswith("/"):
+        suggestion = suggest_command(user_message)
+        if suggestion:
+            await update.message.reply_text(
+                f"❓ Comando '{user_message}' non riconosciuto. Intendevi '{suggestion}'? Usa /help per vedere i comandi disponibili."
+            )
+        else:
+            await update.message.reply_text(
+                f"❓ Comando '{user_message}' non riconosciuto. Usa /help per vedere i comandi disponibili."
+            )
+    else:
+        await update.message.reply_text("Non ho capito. Usa /help per vedere cosa posso fare.")
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_message = update.message.text
+    await update.message.reply_text(f"Hai detto: {user_message}. Usa /help per vedere i comandi disponibili.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logging.error(f"❌ Errore gestito: {context.error}")
@@ -150,7 +173,8 @@ async def main():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(CommandHandler("crea_missione", create_mission))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    telegram_app.add_handler(MessageHandler(filters.COMMAND, unknown))
     telegram_app.add_error_handler(error_handler)
 
     await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")

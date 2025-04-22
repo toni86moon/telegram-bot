@@ -59,12 +59,63 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"❌ Errore durante l'invio del messaggio /start: {e}")
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce il comando /help."""
+    try:
+        logging.info(f"📢 Comando /help ricevuto da: {update.effective_chat.id}")
+        await update.message.reply_text("Ecco i comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo messaggio")
+    except Exception as e:
+        logging.error(f"❌ Errore durante l'invio del messaggio /help: {e}")
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Risponde ai messaggi di testo generici."""
+    try:
+        user_message = update.message.text.strip()
+        logging.info(f"📩 Messaggio ricevuto: {user_message}")
+        if not user_message:
+            await update.message.reply_text("Non ho capito il tuo messaggio. Prova a scrivere qualcosa!")
+        else:
+            await update.message.reply_text(f"Hai detto: {user_message}")
+    except Exception as e:
+        logging.error(f"❌ Errore durante l'invio della risposta: {e}")
+
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Risponde ai comandi sconosciuti."""
+    try:
+        logging.info(f"❓ Comando sconosciuto ricevuto: {update.message.text}")
+        await update.message.reply_text("Mi dispiace, non riconosco questo comando. Usa /help per vedere i comandi disponibili.")
+    except Exception as e:
+        logging.error(f"❌ Errore durante l'invio della risposta per comando sconosciuto: {e}")
+
+# --- GESTIONE ERRORI ---
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Log degli errori."""
+    logging.error(f"❌ Errore globale: {context.error}")
+    if update:
+        logging.error(f"🔍 Contesto dell'aggiornamento: {update.to_dict()}")
+    if update and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Si è verificato un errore interno. Riprova più tardi."
+            )
+        except Exception as e:
+            logging.error(f"⚠️ Impossibile notificare l'utente dell'errore: {e}")
+
 async def main():
     global telegram_app
     telegram_app = Application.builder().token(BOT_TOKEN).build()
 
+    # Aggiungi handler
     telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("help", help_command))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    telegram_app.add_handler(MessageHandler(filters.COMMAND, unknown))  # Catch-all per comandi non riconosciuti
 
+    # Aggiungi gestore degli errori
+    telegram_app.add_error_handler(error_handler)
+
+    # Configura il webhook
     await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
     logging.info(f"✅ Webhook configurato su: {WEBHOOK_URL}/{BOT_TOKEN}")
 

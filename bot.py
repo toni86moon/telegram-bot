@@ -23,6 +23,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")  # Aggiunto controllo ADMIN_USER_ID
 
 if not BOT_TOKEN:
     raise ValueError("❌ Variabile d'ambiente BOT_TOKEN mancante.")
@@ -30,6 +31,8 @@ if not WEBHOOK_URL:
     raise ValueError("❌ Variabile d'ambiente WEBHOOK_URL mancante.")
 if not SUPABASE_URL or not SUPABASE_API_KEY:
     raise ValueError("❌ Variabili d'ambiente per Supabase mancanti.")
+if not ADMIN_USER_ID:
+    raise ValueError("❌ Variabile d'ambiente ADMIN_USER_ID mancante.")  # Verifica variabile ADMIN_USER_ID
 
 # --- INIZIALIZZAZIONE SUPABASE ---
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
@@ -80,7 +83,7 @@ async def register_user(telegram_id, username_instagram):
 
 # Funzione per creare una missione
 async def create_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id == ADMIN_USER_ID:  # Controlla se è l'amministratore
+    if update.message.from_user.id == int(ADMIN_USER_ID):  # Controlla se è l'amministratore
         args = context.args
         if len(args) < 2:
             await update.message.reply_text("⚠️ Sintassi non corretta! Usa /crea_missione <tipo> <url>")
@@ -171,5 +174,6 @@ if __name__ == "__main__":
         if telegram_app:
             loop.run_until_complete(telegram_app.stop())
             loop.close()
+
 
 

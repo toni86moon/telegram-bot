@@ -10,11 +10,8 @@ instaloader==4.9.6
 # Libreria per gestire variabili d'ambiente tramite file .env
 python-dotenv==1.0.0
 
-# Driver per connettersi a database MySQL
-mysql-connector-python==8.0.33
+# Libreria per connettersi a database PostgreSQL (necessaria per Supabase)
+asyncpg==0.27.0
 
-# Libreria opzionale per facilitare query asincrone su MySQL (se necessario)
-aiomysql==0.1.1
-
-#libreria 
-flask
+# Libreria per creare un server web
+Flask==2.3.2

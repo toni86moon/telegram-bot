@@ -8,8 +8,11 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # L'URL pubblico del tuo bot (es. https://<render-app>.onrender.com)
 
-if not BOT_TOKEN or not WEBHOOK_URL:
-    raise ValueError("Assicurati che BOT_TOKEN e WEBHOOK_URL siano configurati.")
+if not BOT_TOKEN:
+    raise ValueError("La variabile d'ambiente BOT_TOKEN non è configurata. Assicurati di fornire un token valido del bot.")
+
+if not WEBHOOK_URL:
+    raise ValueError("La variabile d'ambiente WEBHOOK_URL non è configurata. Assicurati di fornire un URL pubblico valido per il webhook.")
 
 # --- FLASK SERVER ---
 app = Flask(__name__)
@@ -32,7 +35,18 @@ def webhook():
 
             update = Update.de_json(update_data, telegram_app.bot)
             print(f"✅ Aggiornamento ricevuto: {update.to_dict()}")  # Log dell'aggiornamento
-            telegram_app.update_queue.put_nowait(update)
+
+            # Log aggiuntivi per tipo di aggiornamento
+            if update.message:
+                print(f"📩 Messaggio ricevuto: {update.message.text}")
+            elif update.callback_query:
+                print(f"🔘 Callback query ricevuta: {update.callback_query.data}")
+            else:
+                print("🔄 Tipo di aggiornamento non gestito.")
+
+            # Avvia un thread separato per processare l'aggiornamento
+            from threading import Thread
+            Thread(target=telegram_app.update_queue.put_nowait, args=(update,)).start()
         except Exception as e:
             print(f"❌ Errore durante il webhook: {e}")  # Log degli errori
             return "Internal Server Error", 500
@@ -49,7 +63,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Risponde ai messaggi di testo generici."""
-    await update.message.reply_text(f"Hai detto: {update.message.text}")
+    user_message = update.message.text.strip()
+    if not user_message:
+        await update.message.reply_text("Non ho capito il tuo messaggio. Prova a scrivere qualcosa!")
+    else:
+        await update.message.reply_text(f"Hai detto: {user_message}")
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Risponde ai comandi sconosciuti."""
@@ -59,9 +77,14 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Log degli errori."""
     print(f"❌ Errore: {context.error}")
+    if update:
+        print(f"🔍 Contesto dell'aggiornamento: {update.to_dict()}")
     if update and update.effective_chat:
         try:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Si è verificato un errore. Riprova più tardi.")
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Si è verificato un errore interno. Riprova più tardi."
+            )
         except Exception as e:
             print(f"⚠️ Impossibile notificare l'utente dell'errore: {e}")
 
@@ -81,11 +104,17 @@ async def main():
 
     # Configura il webhook
     await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-
     print(f"✅ Webhook configurato su: {WEBHOOK_URL}/{BOT_TOKEN}")
 
-    await telegram_app.start()
-    await asyncio.Event().wait()
+    try:
+        print("🚀 Bot in esecuzione...")
+        await telegram_app.start()
+        await asyncio.Event().wait()
+    except Exception as e:
+        print(f"❌ Errore durante l'esecuzione del bot: {e}")
+    finally:
+        print("🛑 Arresto del bot...")
+        await telegram_app.stop()
 
 # --- AVVIO ---
 if __name__ == "__main__":

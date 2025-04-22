@@ -19,10 +19,15 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not BOT_TOKEN:
+    logging.error("❌ La variabile d'ambiente BOT_TOKEN non è configurata.")
     raise ValueError("La variabile d'ambiente BOT_TOKEN non è configurata. Assicurati di fornire un token valido del bot.")
 
 if not WEBHOOK_URL:
+    logging.error("❌ La variabile d'ambiente WEBHOOK_URL non è configurata.")
     raise ValueError("La variabile d'ambiente WEBHOOK_URL non è configurata. Assicurati di fornire un URL pubblico valido per il webhook.")
+
+logging.info(f"🔧 BOT_TOKEN: {'Configurato' if BOT_TOKEN else 'Non configurato'}")
+logging.info(f"🔧 WEBHOOK_URL: {'Configurato' if WEBHOOK_URL else 'Non configurato'}")
 
 # --- FLASK SERVER ---
 app = Flask(__name__)
@@ -53,9 +58,11 @@ def webhook():
     return "OK", 200
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce il comando /start."""
     try:
         logging.info(f"📢 Comando /start ricevuto da: {update.effective_chat.id}")
         await update.message.reply_text("Ciao! Sono attivo e pronto ad aiutarti.")
+        logging.info("✅ Messaggio di risposta per /start inviato con successo.")
     except Exception as e:
         logging.error(f"❌ Errore durante l'invio del messaggio /start: {e}")
 
@@ -64,6 +71,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         logging.info(f"📢 Comando /help ricevuto da: {update.effective_chat.id}")
         await update.message.reply_text("Ecco i comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo messaggio")
+        logging.info("✅ Messaggio di risposta per /help inviato con successo.")
     except Exception as e:
         logging.error(f"❌ Errore durante l'invio del messaggio /help: {e}")
 
@@ -76,6 +84,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Non ho capito il tuo messaggio. Prova a scrivere qualcosa!")
         else:
             await update.message.reply_text(f"Hai detto: {user_message}")
+        logging.info("✅ Messaggio di risposta inviato con successo.")
     except Exception as e:
         logging.error(f"❌ Errore durante l'invio della risposta: {e}")
 
@@ -84,6 +93,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         logging.info(f"❓ Comando sconosciuto ricevuto: {update.message.text}")
         await update.message.reply_text("Mi dispiace, non riconosco questo comando. Usa /help per vedere i comandi disponibili.")
+        logging.info("✅ Messaggio di risposta per comando sconosciuto inviato con successo.")
     except Exception as e:
         logging.error(f"❌ Errore durante l'invio della risposta per comando sconosciuto: {e}")
 
@@ -116,8 +126,11 @@ async def main():
     telegram_app.add_error_handler(error_handler)
 
     # Configura il webhook
-    await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    logging.info(f"✅ Webhook configurato su: {WEBHOOK_URL}/{BOT_TOKEN}")
+    response = await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    if response:
+        logging.info(f"✅ Webhook configurato su: {WEBHOOK_URL}/{BOT_TOKEN}")
+    else:
+        logging.error(f"❌ Errore durante la configurazione del webhook su: {WEBHOOK_URL}/{BOT_TOKEN}")
 
     try:
         logging.info("🚀 Bot in esecuzione...")
@@ -136,6 +149,7 @@ if __name__ == "__main__":
     from threading import Thread
     flask_thread = Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": 5000})
     flask_thread.start()
+    logging.info("✅ Server Flask avviato sulla porta 5000.")
 
     try:
         loop.run_until_complete(main())

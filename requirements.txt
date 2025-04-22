@@ -15,3 +15,6 @@ asyncpg==0.27.0
 
 # Libreria per creare un server web
 Flask==2.3.2
+
+#libreria DB
+supabase-py

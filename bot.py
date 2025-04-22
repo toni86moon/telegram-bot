@@ -70,46 +70,53 @@ def webhook():
 
 # Funzione per gestire la registrazione dell'utente
 async def register_user(telegram_id, username_instagram):
-    existing_user = supabase.table('utenti').select('telegram_id').eq('telegram_id', telegram_id).single()
-    
-    if existing_user is None:
-        supabase.table('utenti').insert({
-            'telegram_id': telegram_id,
-            'username_instagram': username_instagram,
-        }).execute()
-        logging.info(f"👤 Utente {telegram_id} registrato.")
-    else:
-        logging.info(f"👤 Utente {telegram_id} già esistente.")
+    try:
+        result = supabase.table('utenti').select('telegram_id').eq('telegram_id', telegram_id).execute()
+        if len(result.data) == 0:
+            supabase.table('utenti').insert({
+                'telegram_id': telegram_id,
+                'username_instagram': username_instagram,
+            }).execute()
+            logging.info(f"👤 Utente {telegram_id} registrato.")
+        else:
+            logging.info(f"👤 Utente {telegram_id} già esistente.")
+    except Exception as e:
+        logging.error(f"❌ Errore durante la registrazione dell'utente {telegram_id}: {e}")
 
 # Funzione per creare una missione
 async def create_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == int(ADMIN_USER_ID):  # Controlla se è l'amministratore
-        args = context.args
-        if len(args) < 2:
-            await update.message.reply_text("⚠️ Sintassi non corretta! Usa /crea_missione <tipo> <url>")
-            return
-        mission_type, mission_url = args
-        supabase.table('missioni').insert({
-            'tipo': mission_type,
-            'url': mission_url
-        }).execute()
-        await update.message.reply_text(f"✅ Missione {mission_type} creata con successo!")
+        try:
+            args = context.args
+            if len(args) < 2:
+                await update.message.reply_text("⚠️ Sintassi non corretta! Usa /crea_missione <tipo> <url>\nEsempio: /crea_missione follow https://instagram.com/example")
+                return
+            mission_type, mission_url = args
+            supabase.table('missioni').insert({
+                'tipo': mission_type,
+                'url': mission_url
+            }).execute()
+            await update.message.reply_text(f"✅ Missione {mission_type} creata con successo!")
+        except Exception as e:
+            logging.error(f"❌ Errore durante la creazione della missione: {e}")
+            await update.message.reply_text("❌ Si è verificato un errore durante la creazione della missione.")
     else:
         await update.message.reply_text("🚫 Non sei autorizzato a creare missioni.")
 
 # Funzione per tracciare l'attività
 async def log_activity(telegram_id, evento, descrizione):
-    supabase.table('log_attivita').insert({
-        'telegram_id': telegram_id,
-        'evento': evento,
-        'descrizione': descrizione
-    }).execute()
+    try:
+        supabase.table('log_attivita').insert({
+            'telegram_id': telegram_id,
+            'evento': evento,
+            'descrizione': descrizione
+        }).execute()
+    except Exception as e:
+        logging.error(f"❌ Errore durante il log dell'attività: {e}")
 
 # Funzione per verificare la missione con Instaloader
 async def check_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Verifica se l'utente ha completato la missione tramite Instaloader
-    # Implementare la logica di controllo della missione
-    pass
+    await update.message.reply_text("🚧 Funzione di verifica missioni non ancora implementata.")
 
 # --- HANDLER PRINCIPALI ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -152,7 +159,6 @@ async def main():
     logging.info("🚀 Applicazione Telegram avviata in modalità webhook.")
     await telegram_app.initialize()
     await telegram_app.start()
-    await telegram_app.updater.start_polling()  # Necessario per gestire errori async anche in webhook mode
     await asyncio.Event().wait()
 
 # --- AVVIO SERVER FLASK + LOOP ASYNC ---
@@ -160,7 +166,9 @@ if __name__ == "__main__":
     from threading import Thread
 
     # Avvio Flask in un thread separato
-    flask_thread = Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 5000))})
+    flask_port = int(os.environ.get("PORT", 5000))
+    logging.info(f"✅ Server Flask avviato sulla porta {flask_port}.")
+    flask_thread = Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": flask_port})
     flask_thread.start()
 
     # Avvio asyncio loop principale
@@ -173,7 +181,7 @@ if __name__ == "__main__":
     finally:
         if telegram_app:
             loop.run_until_complete(telegram_app.stop())
-            loop.close()
+        loop.close()
 
 
 

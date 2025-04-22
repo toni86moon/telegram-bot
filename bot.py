@@ -12,6 +12,7 @@ from telegram.ext import (
 )
 from supabase import create_client, Client
 from difflib import get_close_matches  # Per suggerire comandi simili
+from threading import Thread
 
 # --- LOGGING ---
 logging.basicConfig(
@@ -57,13 +58,20 @@ def webhook():
         update = Update.de_json(update_data, telegram_app.bot)
         logging.info(f"📨 Update ricevuto: {update_data}")
 
-        # Utilizza asyncio.create_task per eseguire process_update
-        asyncio.create_task(telegram_app.process_update(update))
+        # Avvia la coroutine asincrona in un loop separato
+        asyncio.run(handle_update(update))
 
         return "OK", 200
     except Exception as e:
         logging.error(f"❌ Errore nel webhook: {e}")
         return "Internal Server Error", 500
+
+async def handle_update(update: Update):
+    """Funzione asincrona per gestire gli aggiornamenti ricevuti."""
+    try:
+        await telegram_app.process_update(update)
+    except Exception as e:
+        logging.error(f"❌ Errore durante l'elaborazione dell'update: {e}")
 
 # --- FUNZIONI DI SUPPORTO ---
 def suggest_command(user_message):
@@ -120,10 +128,6 @@ async def log_activity(telegram_id, evento, descrizione):
         }).execute()
     except Exception as e:
         logging.error(f"❌ Errore durante il log dell'attività: {e}")
-
-# Funzione per verificare la missione (placeholder)
-async def check_mission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚧 Funzione di verifica missioni non ancora implementata.")
 
 # --- HANDLER PRINCIPALI ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -187,8 +191,6 @@ async def main():
 
 # --- AVVIO SERVER FLASK + LOOP ASYNC ---
 if __name__ == "__main__":
-    from threading import Thread
-
     # Avvio Flask in un thread separato
     flask_port = int(os.environ.get("PORT", 5000))
     logging.info(f"✅ Server Flask avviato sulla porta {flask_port}.")
@@ -206,6 +208,7 @@ if __name__ == "__main__":
         if telegram_app:
             loop.run_until_complete(telegram_app.stop())
         loop.close()
+
 
 
 

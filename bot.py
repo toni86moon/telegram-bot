@@ -1,182 +1,167 @@
 import os
-import asyncio
 import logging
-from flask import Flask, request
-from telegram import Update, ChatMember
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
-)
+import instaloader
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from supabase import create_client
+from dotenv import load_dotenv
 
-# --- LOGGING ---
+# Carica variabili d'ambiente dal file .env
+load_dotenv()
+
+# Logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 
-# --- COSTANTI ---
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+# Supabase setup
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
-if not BOT_TOKEN:
-    raise ValueError("❌ Variabile d'ambiente BOT_TOKEN mancante.")
-if not WEBHOOK_URL:
-    raise ValueError("❌ Variabile d'ambiente WEBHOOK_URL mancante.")
+# Instaloader setup
+L = instaloader.Instaloader()
 
-# --- VARIABILI GLOBALI ---
-missioni = {}  # Dict con {chat_id: {user_id: missione}}
-missioni_attive = {}  # Dict con {chat_id: testo_missione}
-
-# --- FLASK APP ---
-app = Flask(__name__)
-telegram_app = None
-
-@app.route("/", methods=["GET"])
-def home():
-    return "🤖 Il bot è attivo."
-
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
+# Funzione per verificare interazioni Instagram (like, commenti, follow)
+def verifica_instagram(username_insta, tipo_missione):
     try:
-        update_data = request.get_json(force=True)
-        if not update_data:
-            logging.warning("⚠️ Nessun dato ricevuto nel body.")
-            return "Bad Request", 400
+        profile = instaloader.Profile.from_username(L.context, username_insta)
+        
+        # Esegui la verifica in base al tipo di missione
+        if tipo_missione == "like":
+            # Logica per verificare se l'utente ha messo like a un determinato post
+            post_url = os.getenv("INSTAGRAM_POST_URL")  # URL del post da controllare
+            post = instaloader.Post.from_url(L.context, post_url)
+            return post.likes_count > 0  # Verifica se ci sono like (potresti migliorare con un controllo sugli utenti che hanno messo like)
 
-        update = Update.de_json(update_data, telegram_app.bot)
-        logging.info(f"📨 Update ricevuto: {update_data}")
+        elif tipo_missione == "commento":
+            # Logica per verificare se l'utente ha commentato su un post
+            post_url = os.getenv("INSTAGRAM_POST_URL")  # URL del post da controllare
+            post = instaloader.Post.from_url(L.context, post_url)
+            for comment in post.get_comments():
+                if comment.owner.username == username_insta:
+                    return True
+            return False
+        
+        elif tipo_missione == "follow":
+            # Logica per verificare se l'utente segue un account specifico
+            account_da_seguire = os.getenv("INSTAGRAM_ACCOUNT_TO_FOLLOW")  # Account che l'utente deve seguire
+            account = instaloader.Profile.from_username(L.context, account_da_seguire)
+            return profile.followed_by(account)  # Verifica se il profilo segue l'account
 
-        asyncio.run_coroutine_threadsafe(
-            telegram_app.process_update(update),
-            telegram_app.loop
-        )
+        return False  # Se non corrisponde a nessun tipo di missione
 
-        return "OK", 200
-    except Exception as e:
-        logging.error(f"❌ Errore nel webhook: {e}")
-        return "Internal Server Error", 500
-
-# --- UTILS ---
-async def is_admin(chat_id, user_id, context):
-    try:
-        member = await context.bot.get_chat_member(chat_id, user_id)
-        return member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER]
-    except Exception as e:
-        logging.error(f"Errore controllo admin: {e}")
+    except instaloader.exceptions.InstaloaderException as e:
+        logging.error(f"Errore durante il caricamento del profilo Instagram: {e}")
         return False
 
-# --- HANDLER ---
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Ciao! Sono attivo 🚀")
+    telegram_id = update.effective_user.id
+    username = update.effective_user.username
 
+    user = supabase.table("utenti").select("*").eq("telegram_id", telegram_id).execute()
+    if not user.data:
+        supabase.table("utenti").insert({
+            "telegram_id": telegram_id,
+            "username_instagram": None
+        }).execute()
+        await update.message.reply_text("👋 Benvenuto nel nostro bot di missioni su Instagram!")
+    else:
+        await update.message.reply_text("Bentornato! 🎉")
+
+# /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Comandi disponibili:\n/start\n/help\n/crea_missione <testo>\n/missione\n/verifica")
+    await update.message.reply_text(
+        "Comandi disponibili:\n"
+        "/start - Registrazione\n"
+        "/insta <tuo_utente_instagram> - Imposta il tuo username Instagram\n"
+        "/verifica <tipo_missione> - Controlla se hai completato la missione (like, commento, follow)\n"
+        "/punti - Mostra i tuoi punti attuali"
+    )
 
-async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    if not await is_admin(chat_id, user_id, context):
-        await update.message.reply_text("❌ Solo gli admin possono creare missioni.")
+# /insta
+async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    if len(context.args) != 1:
+        await update.message.reply_text("❌ Usa il comando così: /insta tuo_username")
         return
+    username_insta = context.args[0]
+    supabase.table("utenti").update({"username_instagram": username_insta}).eq("telegram_id", telegram_id).execute()
+    await update.message.reply_text(f"✅ Username Instagram impostato: {username_insta}")
 
-    testo = " ".join(context.args)
-    if not testo:
-        await update.message.reply_text("ℹ️ Usa: /crea_missione <testo della missione>")
-        return
-
-    missioni_attive[chat_id] = testo
-    await update.message.reply_text(f"✅ Missione creata:\n{testo}")
-
-async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    testo = missioni_attive.get(chat_id)
-
-    if not testo:
-        await update.message.reply_text("❌ Nessuna missione disponibile.")
-        return
-
-    missioni.setdefault(chat_id, {})[user_id] = testo
-    await update.message.reply_text(f"🌟 Ecco la tua missione:\n{testo}\nScrivi /verifica quando hai finito.")
-
+# /verifica
 async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    missione_utente = missioni.get(chat_id, {}).get(user_id)
-
-    if not missione_utente:
-        await update.message.reply_text("ℹ️ Non hai alcuna missione attiva. Usa /missione.")
+    telegram_id = update.effective_user.id
+    if len(context.args) != 1 or context.args[0] not in ["like", "commento", "follow"]:
+        await update.message.reply_text("❌ Usa il comando così: /verifica <like/commento/follow>")
         return
+    
+    tipo_missione = context.args[0]
+    user = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute()
 
-    # Placeholder per controllo Instaloader
-    # TODO: Integrazione con Instaloader e verifica missione
+    if user.data:
+        username_insta = user.data[0]["username_instagram"]
+        if username_insta and verifica_instagram(username_insta, tipo_missione):
+            supabase.table("log_attivita").insert({
+                "telegram_id": telegram_id,
+                "evento": "verifica",
+                "descrizione": f"La missione '{tipo_missione}' è stata completata."
+            }).execute()
+            await update.message.reply_text(f"🎉 Missione '{tipo_missione}' completata! Hai guadagnato dei punti.")
+            supabase.table("utenti").update({"punti": 10}).eq("telegram_id", telegram_id).execute()  # Aggiungi punti
+        else:
+            await update.message.reply_text(f"❌ La missione '{tipo_missione}' non è stata completata. Assicurati di aver interagito correttamente.")
+            supabase.table("log_attivita").insert({
+                "telegram_id": telegram_id,
+                "evento": "verifica",
+                "descrizione": f"Tentativo di completare la missione '{tipo_missione}' fallito."
+            }).execute()
+    else:
+        await update.message.reply_text("⚠️ Non sei registrato. Usa /start per iniziare.")
 
-    # Placeholder per codice sconto
-    codice_sconto = "SCONTO10"
-    await update.message.reply_text(f"🎉 Missione completata! Il tuo codice sconto è: {codice_sconto}")
-    missioni[chat_id].pop(user_id, None)
+# /punti
+async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    user = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute()
+    if user.data:
+        punteggio = user.data[0]["punti"]
+        await update.message.reply_text(f"🏆 Hai {punteggio} punti.")
+    else:
+        await update.message.reply_text("⚠️ Non sei registrato. Usa /start per iniziare.")
 
+# Comando sconosciuto
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Comando non riconosciuto. Usa /help.")
+    await update.message.reply_text("❓ Comando non riconosciuto. Scrivi /help per vedere la lista.")
 
+# Gestione errori
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logging.error(f"❌ Errore gestito: {context.error}")
-    if isinstance(update, Update) and update.effective_chat:
-        try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Si è verificato un errore interno. Riprova più tardi."
-            )
-        except Exception as notify_error:
-            logging.error(f"⚠️ Errore durante la notifica all'utente: {notify_error}")
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+    if isinstance(update, Update) and update.message:
+        await update.message.reply_text("❌ Si è verificato un errore imprevisto. Riprova più tardi.")
 
-# --- PLACEHOLDER ECHO HANDLER ---
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(update.message.text)
+# Avvio del bot
+if __name__ == '__main__':
+    import asyncio
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    
+    async def main():
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# --- MAIN ASYNC FUNCTION ---
-async def main():
-    global telegram_app
-    telegram_app = Application.builder().token(BOT_TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("help", help_command))
+        app.add_handler(CommandHandler("insta", insta))
+        app.add_handler(CommandHandler("verifica", verifica))
+        app.add_handler(CommandHandler("punti", punti))
+        app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CommandHandler("help", help_command))
-    telegram_app.add_handler(CommandHandler("crea_missione", crea_missione))
-    telegram_app.add_handler(CommandHandler("missione", missione))
-    telegram_app.add_handler(CommandHandler("verifica", verifica))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-    telegram_app.add_handler(MessageHandler(filters.COMMAND, unknown))
-    telegram_app.add_error_handler(error_handler)
+        app.add_error_handler(error_handler)
 
-    await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    logging.info(f"✅ Webhook configurato su: {WEBHOOK_URL}/{BOT_TOKEN}")
+        print("✅ Bot avviato")
+        await app.run_polling()
 
-    logging.info("🚀 Applicazione Telegram avviata in modalità webhook.")
-    await telegram_app.initialize()
-    await telegram_app.start()
-    await asyncio.Event().wait()
-
-# --- AVVIO SERVER FLASK + LOOP ASYNC ---
-if __name__ == "__main__":
-    from threading import Thread
-
-    flask_thread = Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 5000))})
-    flask_thread.start()
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        logging.info("🛑 Interruzione manuale.")
-    finally:
-        if telegram_app:
-            loop.run_until_complete(telegram_app.stop())
-            loop.close()
+    asyncio.run(main())
 
 
 

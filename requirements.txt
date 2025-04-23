@@ -2,7 +2,7 @@
 python-telegram-bot==20.1
 
 # Libreria per effettuare richieste HTTP
-httpx==0.23.3
+httpx
 
 # Libreria per interagire con Instagram
 instaloader==4.9.6
@@ -15,6 +15,10 @@ asyncpg==0.27.0
 
 # Libreria per creare un server web
 Flask==2.3.2
+
+# Libreria ufficiale per Supabase
+supabase==2.14.0
+
 
 # Libreria ufficiale per Supabase
 supabase==2.14.0

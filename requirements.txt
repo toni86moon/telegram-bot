@@ -17,4 +17,8 @@ asyncpg==0.27.0
 Flask==2.3.2
 
 # Libreria ufficiale per Supabase
-supabase
+supabase==2.14.0
+
+# Aggiungi una versione compatibile di httpx
+httpx==0.26.0  # Versione compatibile con python-telegram-bot e supabase
+

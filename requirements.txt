@@ -1,5 +1,5 @@
 # Libreria per creare e gestire bot Telegram
-python-telegram-bot==20.0
+python-telegram-bot==20.1  # Aggiorna alla versione compatibile con le altre librerie
 
 # Libreria per effettuare richieste HTTP
 requests==2.28.2
@@ -20,5 +20,6 @@ Flask==2.3.2
 supabase==2.14.0
 
 # Aggiungi una versione compatibile di httpx
-httpx==0.26.0  # Versione compatibile con python-telegram-bot e supabase
+httpx==0.23.1  # La versione richiesta da python-telegram-bot
+
 

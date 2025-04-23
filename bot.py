@@ -134,6 +134,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         except Exception as notify_error:
             logging.error(f"⚠️ Errore durante la notifica all'utente: {notify_error}")
 
+# --- PLACEHOLDER ECHO HANDLER ---
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(update.message.text)
+
 # --- MAIN ASYNC FUNCTION ---
 async def main():
     global telegram_app

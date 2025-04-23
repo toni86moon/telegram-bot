@@ -34,7 +34,7 @@ L = instaloader.Instaloader()
 # Menu
 MAIN_MENU = ReplyKeyboardMarkup([
     ["/missione", "/verifica"],
-    ["/punti", "/help"]
+    ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
 # Comandi
@@ -48,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Bentornato! 🎉", reply_markup=MAIN_MENU)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Comandi:\n/start - Registrazione\n/insta <username> - Collega Instagram\n/missione [tipo] - Ricevi una missione (like, comment, follow)\n/verifica - Verifica completamento\n/punti - Punti attuali", reply_markup=MAIN_MENU)
+    await update.message.reply_text("Comandi:\n/start - Registrazione\n/insta <username> - Collega Instagram\n/missione [tipo] - Ricevi una missione (like, comment, follow)\n/verifica - Verifica completamento\n/punti - Punti attuali\n/getlink - Ottieni il tuo link referral", reply_markup=MAIN_MENU)
 
 async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
@@ -147,7 +147,23 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
     await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
 
+async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    user_result = supabase.table("utenti").select("referral_link").eq("telegram_id", telegram_id).execute()
+    if user_result.data:
+        referral = user_result.data[0].get("referral_link")
+        if referral:
+            await update.message.reply_text(f"🔗 Il tuo link referral: {referral}", reply_markup=MAIN_MENU)
+        else:
+            referral = f"https://tuosito.it/?ref={telegram_id}"
+            supabase.table("utenti").update({"referral_link": referral}).eq("telegram_id", telegram_id).execute()
+            await update.message.reply_text(f"🔗 Ecco il tuo link referral generato: {referral}", reply_markup=MAIN_MENU)
+    else:
+        await update.message.reply_text("❌ Non sei ancora registrato. Usa /start per iniziare.", reply_markup=MAIN_MENU)
+
 def main():
+    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -155,6 +171,7 @@ def main():
     app.add_handler(CommandHandler("missione", missione))
     app.add_handler(CommandHandler("verifica", verifica))
     app.add_handler(CommandHandler("punti", punti))
+    app.add_handler(CommandHandler("getlink", getlink))
     app.run_polling()
 
 if __name__ == '__main__':

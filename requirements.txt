@@ -16,5 +16,8 @@ asyncpg==0.27.0
 # Libreria per creare un server web
 Flask==2.3.2
 
-# Libreria ufficiale per Supabase (ultima versione da GitHub)
-git+https://github.com/supabase-community/supabase-py.git
+# Dipendenza comune tra python-telegram-bot e supabase
+httpx==0.26.0
+
+# Libreria ufficiale per Supabase
+supabase

@@ -1,6 +1,6 @@
-python-telegram-bot==20.6
+python-telegram-bot==20.3
 httpx==0.23.3
-instaloader==4.10
 supabase-py==0.2.8
+instaloader==4.10
 requests==2.31.0
 

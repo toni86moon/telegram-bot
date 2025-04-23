@@ -4,7 +4,7 @@ import logging
 import instaloader
 import requests
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from supabase import create_client
@@ -22,6 +22,7 @@ CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID")
 WOOCOMMERCE_URL = os.getenv("WOOCOMMERCE_API_URL")
 WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY")
 WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET")
+VERIFICA_TRAMITE_API = False  # Se impostato su True, salta il controllo con Instaloader
 
 # Supabase setup
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -36,6 +37,16 @@ MAIN_MENU = ReplyKeyboardMarkup([
     ["/missione", "/verifica"],
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
+
+# Funzione di verifica
+def verifica_missione_completata(tipo, username, post):
+    if tipo == "like":
+        return username in [like.username for like in post.get_likes()]
+    elif tipo == "follow":
+        return username in [f.username for f in post.owner_profile.get_followers()]
+    elif tipo == "comment":
+        return username in [c.owner.username for c in post.get_comments()]
+    return False
 
 # Comandi
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,9 +89,14 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         filtro = {"tipo": tipo}
 
+    completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
+    completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
+
     mission_query = supabase.table("missioni").select("*").eq("attiva", True)
     if filtro:
         mission_query = mission_query.eq("tipo", filtro["tipo"])
+    if completate_ids:
+        mission_query = mission_query.notin_("id", completate_ids)
     mission = mission_query.limit(1).execute()
 
     if not mission.data:
@@ -107,22 +123,19 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url_post = mission.data[0]['url']
     tipo = mission.data[0]['tipo']
+    mission_id = mission.data[0]['id']
 
-    try:
-        shortcode = urlparse(url_post).path.strip("/").split("/")[-1]
-        post = instaloader.Post.from_shortcode(L.context, shortcode)
-        completata = False
-
-        if tipo == "like":
-            completata = username_insta in [like.username for like in post.get_likes()] 
-        elif tipo == "follow":
-            completata = username_insta in [f.username for f in post.owner_profile.get_followers()]
-        elif tipo == "comment":
-            completata = username_insta in [c.owner.username for c in post.get_comments()]
-
-    except Exception as e:
-        logging.error(f"Errore Instaloader: {e}")
-        completata = False
+    completata = False
+    if VERIFICA_TRAMITE_API:
+        completata = True
+    else:
+        try:
+            shortcode = urlparse(url_post).path.strip("/").split("/")[-1]
+            post = instaloader.Post.from_shortcode(L.context, shortcode)
+            completata = verifica_missione_completata(tipo, username_insta, post)
+        except Exception as e:
+            logging.error(f"Errore Instaloader: {e}")
+            completata = False
 
     if completata:
         punti_correnti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
@@ -130,10 +143,12 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supabase.table("log_attivita").insert({
             "telegram_id": telegram_id,
             "evento": "missione completata",
-            "descrizione": f"Completata missione tipo {tipo} con {username_insta}"
+            "descrizione": f"Completata missione tipo {tipo} con {username_insta}",
+            "mission_id": mission_id
         }).execute()
 
-        response = requests.post(f"{WOOCOMMERCE_URL}/discounts", auth=(WOOCOMMERCE_KEY, WOOCOMMERCE_SECRET), json={"amount": "10%", "usage_limit": 1})
+        scadenza = (datetime.utcnow() + timedelta(days=2)).isoformat()
+        response = requests.post(f"{WOOCOMMERCE_URL}/discounts", auth=(WOOCOMMERCE_KEY, WOOCOMMERCE_SECRET), json={"amount": "10%", "usage_limit": 1, "expiry_date": scadenza})
         if response.status_code == 201:
             codice = response.json().get("code", "N/A")
             await update.message.reply_text(f"✅ Missione completata! Ecco il tuo codice sconto: {codice}", reply_markup=MAIN_MENU)

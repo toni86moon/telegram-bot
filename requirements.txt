@@ -1,19 +1,10 @@
-# Libreria per creare e gestire bot Telegram
+httpx==0.26.0
 python-telegram-bot==20.1
-
-# Libreria per interagire con Instagram
+requests==2.28.2
 instaloader==4.9.6
-
-# Libreria per gestire variabili d'ambiente tramite file .env
 python-dotenv==1.0.0
-
-# Libreria per connettersi a database PostgreSQL (necessaria per Supabase)
 asyncpg==0.27.0
-
-# Libreria per creare un server web
 Flask==2.3.2
-
-# Libreria ufficiale per Supabase
 supabase==2.14.0
 
 

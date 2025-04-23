@@ -1,9 +1,6 @@
 # Libreria per creare e gestire bot Telegram
 python-telegram-bot==20.1
 
-# Libreria per effettuare richieste HTTP
-httpx
-
 # Libreria per interagire con Instagram
 instaloader==4.9.6
 
@@ -19,9 +16,6 @@ Flask==2.3.2
 # Libreria ufficiale per Supabase
 supabase==2.14.0
 
-
-# Libreria ufficiale per Supabase
-supabase==2.14.0
 
 
 

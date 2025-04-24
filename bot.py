@@ -56,53 +56,6 @@ def verifica_missione_completata(tipo, username, post):
         return False
     return False
 
-async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    try:
-        # Recupera l'utente e le missioni non completate
-        completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
-        completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
-        
-        mission_query = supabase.table("missioni").select("*").eq("attiva", True)
-        if completate_ids:
-            mission_query = mission_query.notin_("id", completate_ids)
-        missioni = mission_query.execute().data
-        
-        if not missioni:
-            await update.message.reply_text("⏳ Non ci sono missioni attive da verificare.", reply_markup=MAIN_MENU)
-            return
-
-        # Verifica le missioni
-        for missione in missioni:
-            tipo = missione['tipo']
-            url = missione['url']
-            testo = f"🔍 Sto verificando la missione: {tipo.upper()} il post {url}..."
-            await update.message.reply_text(testo, reply_markup=MAIN_MENU)
-
-            try:
-                # Estrai l'ID del post da Instagram
-                post_id = url.split('/')[-2]  # Estrae il post ID dal formato dell'URL di Instagram
-                post = L.get_post(post_id)
-
-                username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
-                completato = verifica_missione_completata(tipo, username_instagram, post)
-
-                if completato:
-                    # Aggiungi la missione come completata
-                    supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
-                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-                else:
-                    await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-
-            except Exception as e:
-                logging.error(f"Errore durante la verifica della missione: {e}")
-                await update.message.reply_text(f"⚠️ Errore nella verifica della missione: {url}. Riprova più tardi.", reply_markup=MAIN_MENU)
-
-    except Exception as e:
-        logging.error(f"Errore durante la verifica delle missioni: {e}")
-        await update.message.reply_text("⚠️ Si è verificato un errore durante la verifica delle missioni. Riprova più tardi.", reply_markup=MAIN_MENU)
-
-
 # Comandi del bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
@@ -194,6 +147,44 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not missioni:
             await update.message.reply_text("⏳ Non ci sono missioni attive da verificare.", reply_markup=MAIN_MENU)
             return
+
+        # Verifica le missioni
+        for missione in missioni:
+            tipo = missione['tipo']
+            url = missione['url']
+            testo = f"🔍 Sto verificando la missione: {tipo.upper()} il post {url}..."
+            await update.message.reply_text(testo, reply_markup=MAIN_MENU)
+
+            # Usa Instaloader per verificare se l'utente ha completato la missione
+            try:
+                post = L.get_post_from_url(url)
+                username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
+                completato = verifica_missione_completata(tipo, username_instagram, post)
+
+                if completato:
+                    # Aggiungi la missione come completata
+                    supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
+                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+                else:
+                    await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+
+            except Exception as e:
+                logging.error(f"Errore durante la verifica della missione: {e}")
+                await update.message.reply_text(f"⚠️ Errore nella verifica della missione: {url}. Riprova più tardi.", reply_markup=MAIN_MENU)
+
+    except Exception as e:
+        logging.error(f"Errore durante la verifica delle missioni: {e}")
+        await update.message.reply_text("⚠️ Si è verificato un errore durante la verifica delle missioni. Riprova più tardi.", reply_markup=MAIN_MENU)
+
+
+async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    try:
+        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
+        await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
+    except Exception as e:
+        logging.error(f"Errore durante il recupero dei punti: {e}")
+        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
 # Funzione per creare missioni
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):

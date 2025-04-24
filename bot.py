@@ -157,7 +157,7 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Usa Instaloader per verificare se l'utente ha completato la missione
             try:
-                post = L.get_post(url)
+                post = L.get_post_from_url(url)
                 username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
                 completato = verifica_missione_completata(tipo, username_instagram, post)
 

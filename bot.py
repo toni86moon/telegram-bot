@@ -149,6 +149,47 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
+# Funzione per creare una missione
+async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    
+    # Verifica se l'utente è l'amministratore
+    if telegram_id != ADMIN_ID:
+        await update.message.reply_text("❌ Solo l'amministratore può creare missioni.")
+        return
+    
+    if len(context.args) != 2:
+        await update.message.reply_text("❌ Usa il formato: /crea_missione <tipo> <url>")
+        return
+
+    tipo = context.args[0].lower()
+    url = context.args[1]
+
+    # Controlla che il tipo di missione sia valido
+    if tipo not in ["like", "comment", "follow"]:
+        await update.message.reply_text("❌ Tipo di missione non valido. Usa: like, comment, follow.")
+        return
+
+    # Aggiungi la missione nel database
+    try:
+        # Aggiungi la missione a Supabase
+        mission_data = {
+            "tipo": tipo,
+            "url": url,
+            "attiva": True,
+            "data_creazione": datetime.now()
+        }
+        supabase.table("missioni").insert(mission_data).execute()
+
+        # Invia notifica a tutti gli utenti nel gruppo
+        message = f"🔔 Nuova missione disponibile: {tipo.upper()} il post: {url}\nEsegui la missione e usa /verifica per completarla!"
+        await context.bot.send_message(chat_id=CANAL_TELEGRAM_ID, text=message)
+
+        await update.message.reply_text(f"✅ Missione {tipo.upper()} creata con successo! URL: {url}")
+    except Exception as e:
+        logging.error(f"Errore durante la creazione della missione: {e}")
+        await update.message.reply_text("⚠️ Si è verificato un errore durante la creazione della missione. Riprova più tardi.")
+
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -159,6 +200,7 @@ def main():
     app.add_handler(CommandHandler("insta", insta))
     app.add_handler(CommandHandler("missione", missione))
     app.add_handler(CommandHandler("punti", punti))
+    app.add_handler(CommandHandler("crea_missione", crea_missione))  # Aggiunto il nuovo comando
 
     # Avvia il webhook
     app.run_webhook(
@@ -169,6 +211,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 

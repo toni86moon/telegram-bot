@@ -12,6 +12,7 @@ from telegram.ext import (
     filters
 )
 from supabase import create_client, Client
+from aiohttp import web  # Per healthcheck su Render
 
 # Logging
 logging.basicConfig(
@@ -28,9 +29,10 @@ WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY", "").strip()
 WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 
 # Verifica variabili ambiente
-if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY]):
+if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
     raise ValueError("Variabili d'ambiente mancanti o errate.")
 
 # Supabase setup
@@ -125,25 +127,39 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Webhook
 async def set_webhook(application):
-    webhook_url = os.getenv("WEBHOOK_URL", "").strip()
-    if webhook_url:
-        await application.bot.set_webhook(url=webhook_url)
-    else:
-        logging.error("URL Webhook non configurato!")
+    await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
 
-# Main
-def main():
+# Healthcheck route (per evitare errore 502 su Render)
+async def handle_healthcheck(request):
+    return web.Response(text="OK")
+
+# Main async
+async def main():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("aggiungi_missione", aggiungi_missione))
     application.add_handler(CommandHandler("verifica", verifica))
 
-    asyncio.run(set_webhook(application))
-    application.run_webhook(listen="0.0.0.0", port=int(os.getenv("PORT", "5000")), url_path=BOT_TOKEN)
+    # Imposta Webhook
+    await set_webhook(application)
+
+    # Webhook server + healthcheck con aiohttp
+    runner = web.AppRunner(application.web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(os.getenv("PORT", "5000")))
+    application.web_app.router.add_get("/", handle_healthcheck)
+    await site.start()
+
+    logging.info("Bot avviato via webhook su Render.")
+    await application.start()
+    await application.updater.start_polling()  # Non strettamente necessario ma utile in fallback
+    await application.updater.idle()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
 
 
 

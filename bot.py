@@ -172,14 +172,6 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Errore durante la verifica della missione: {e}")
                 await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
 
-# Qualsiasi blocco try incompleto deve essere corretto come segue:
-try:
-    # Codice che potrebbe generare eccezioni
-    pass
-except Exception as e:
-    logging.error(f"Errore: {e}")
-    # Gestisci l'errore o lascia un commento esplicativo
-
 # Correzione della funzione punti
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id

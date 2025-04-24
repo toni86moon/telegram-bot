@@ -149,6 +149,7 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
+# Funzione per creare missioni
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
 
@@ -200,6 +201,10 @@ def main():
         port=PORT,
         webhook_url=WEBHOOK_URL
     )
+
+if __name__ == '__main__':
+    main()
+
 
 if __name__ == '__main__':
     main()

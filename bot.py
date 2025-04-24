@@ -158,14 +158,22 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text("❌ Usa il formato: /crea_missione <tipo> <url>", reply_markup=MAIN_MENU)
+        await update.message.reply_text(
+            "❌ Usa il formato: /crea_missione <tipo> <url>\n"
+            "Esempio corretto: /crea_missione like https://www.instagram.com/p/xxxxxx",
+            reply_markup=MAIN_MENU
+        )
         return
 
     tipo = context.args[0].lower()
     url = context.args[1]
 
     if tipo not in ["like", "comment", "follow"]:
-        await update.message.reply_text("❌ Tipo non valido. Usa: like, comment, or follow.", reply_markup=MAIN_MENU)
+        await update.message.reply_text(
+            "❌ Tipo non valido. Usa: like, comment, or follow.\n"
+            "Esempio corretto: /crea_missione like https://www.instagram.com/p/xxxxxx",
+            reply_markup=MAIN_MENU
+        )
         return
 
     try:
@@ -182,7 +190,6 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Errore durante la creazione della missione: {e}")
         await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.", reply_markup=MAIN_MENU)
-
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()

@@ -1,9 +1,6 @@
 import os
 import logging
 import instaloader
-import requests
-from urllib.parse import urlparse
-from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from supabase import create_client, Client
@@ -18,9 +15,6 @@ logging.basicConfig(
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_ID = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0").strip())
 CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID", "").strip()
-WOOCOMMERCE_URL = os.getenv("WOOCOMMERCE_API_URL", "").strip()
-WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY", "").strip()
-WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET", "").strip()
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 PORT = int(os.getenv("PORT", "8443").strip())
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
@@ -33,28 +27,11 @@ if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
 # Supabase setup
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
-# Instaloader setup
-L = instaloader.Instaloader()
-
 # Menu
 MAIN_MENU = ReplyKeyboardMarkup([
     ["/missione", "/verifica"],
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
-
-# Funzione di verifica missione
-def verifica_missione_completata(tipo, username, post):
-    try:
-        if tipo == "like":
-            return username in [like.username for like in post.get_likes()]
-        elif tipo == "follow":
-            return username in [f.username for f in post.owner_profile.get_followers()]
-        elif tipo == "comment":
-            return username in [c.owner.username for c in post.get_comments()]
-    except Exception as e:
-        logging.error(f"Errore durante la verifica della missione: {e}")
-        return False
-    return False
 
 # Comandi del bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,6 +77,7 @@ async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
+        # Verifica iscrizione al canale
         member = await context.bot.get_chat_member(chat_id=CANAL_TELEGRAM_ID, user_id=telegram_id)
         if member.status not in ["member", "administrator", "creator"]:
             await update.message.reply_text("🔒 Per ricevere missioni devi iscriverti al canale prima.")
@@ -131,14 +109,47 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not mission.data:
             await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
             return
+
         m = mission.data[0]
+        mission_id = m['id']
         tipo = m['tipo']
         url = m['url']
+
+        supabase.table("log_attivita").insert({
+            "telegram_id": telegram_id,
+            "mission_id": mission_id,
+            "evento": "assegnazione_missione",
+            "descrizione": f"Missione assegnata: {tipo} - {url}"
+        }).execute()
+
         testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
         await context.bot.send_message(chat_id=telegram_id, text=testo)
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
+
+async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+
+    try:
+        log = supabase.table("log_attivita").select("*").eq("telegram_id", telegram_id).execute().data
+        if not log:
+            await update.message.reply_text("🔍 Non ci sono missioni da verificare.", reply_markup=MAIN_MENU)
+            return
+
+        completate_ids = [l["mission_id"] for l in log if "mission_id" in l]
+        for mission_id in completate_ids:
+            mission = supabase.table("missioni").select("*").eq("id", mission_id).execute().data
+            if mission:
+                tipo = mission[0]["tipo"]
+                url = mission[0]["url"]
+                await update.message.reply_text(f"✅ Missione completata: {tipo} {url}", reply_markup=MAIN_MENU)
+                return
+
+        await update.message.reply_text("⚠️ Nessuna missione completata trovata.", reply_markup=MAIN_MENU)
+    except Exception as e:
+        logging.error(f"Errore durante la verifica della missione: {e}")
+        await update.message.reply_text("⚠️ Si è verificato un errore durante la verifica. Riprova più tardi.")
 
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
@@ -158,6 +169,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("insta", insta))
     app.add_handler(CommandHandler("missione", missione))
+    app.add_handler(CommandHandler("verifica", verifica))
     app.add_handler(CommandHandler("punti", punti))
 
     # Avvia il webhook

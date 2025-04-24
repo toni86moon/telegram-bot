@@ -29,6 +29,7 @@ SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
 # Instaloader credentials from environment
 INSTAGRAM_USERNAME = os.getenv("INSTAGRAM_USERNAME", "").strip()
 INSTAGRAM_PASSWORD = os.getenv("INSTAGRAM_PASSWORD", "").strip()
+SESSION_FILE = "session-mordiamo"  # Nome del tuo file di sessione
 
 # Verifica che tutte le variabili siano configurate
 if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
@@ -42,6 +43,14 @@ L = instaloader.Instaloader()
 
 # Login su Instagram
 try:
+    # Tenta di caricare la sessione salvata, se esiste
+    if os.path.exists(SESSION_FILE):
+        L.load_session_from_file(INSTAGRAM_USERNAME, SESSION_FILE)
+        logging.info("Sessione Instagram caricata con successo!")
+    else:
+            # Esegui il login e salva la sessione per il futuro
+            L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            L.save_session_to_file(SESSION_FILE)
     L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)  # Login con username e password
     logging.info("Login su Instagram effettuato con successo!")
 except instaloader.exceptions.BadCredentialsException:

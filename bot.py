@@ -37,9 +37,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 L = instaloader.Instaloader()
 
 # Menu
-MAIN_MENU = ReplyKeyboardMarkup([
-    ["/missione", "/verifica"],
-    ["/punti", "/getlink", "/help"]
+MAIN_MENU = ReplyKeyboardMarkup([ 
+    ["/missione", "/verifica"], 
+    ["/punti", "/getlink", "/help"] 
 ], resize_keyboard=True)
 
 # Funzione di verifica missione
@@ -132,6 +132,7 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
+
 async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
@@ -154,35 +155,32 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             testo = f"🔍 Sto verificando la missione: {tipo.upper()} il post {url}..."
             await update.message.reply_text(testo, reply_markup=MAIN_MENU)
 
-           # Usa Instaloader per verificare se l'utente ha completato la missione
-try:
-    # Estrae l'ID del post dall'URL
-    shortcode = urlparse(url).path.split('/')[-2]
-    
-    # Usa il shortcode per ottenere il post
-    post = instaloader.Post.from_shortcode(L.context, shortcode)
-    
-    # Ottieni lo username Instagram dall'utente
-    username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data
-    if not username_instagram:
-        raise Exception("Username Instagram non trovato per questo utente.")
-    username_instagram = username_instagram[0]["username_instagram"]
-    
-    # Verifica se la missione è completata
-    completato = verifica_missione_completata(tipo, username_instagram, post)
+            try:
+                # Estrae l'ID del post dall'URL
+                shortcode = urlparse(url).path.split('/')[-2]
+                
+                # Usa il shortcode per ottenere il post
+                post = instaloader.Post.from_shortcode(L.context, shortcode)
+                
+                # Ottieni lo username Instagram dall'utente
+                username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data
+                if not username_instagram:
+                    raise Exception("Username Instagram non trovato per questo utente.")
+                username_instagram = username_instagram[0]["username_instagram"]
+                
+                # Verifica se la missione è completata
+                completato = verifica_missione_completata(tipo, username_instagram, post)
 
-    # Rispondi in base alla verifica della missione
-    if completato:
-        # Aggiungi la missione come completata
-        supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
-        await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-    else:
-        await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-
-except Exception as e:
-    logging.error(f"Errore durante la verifica della missione: {e}")
-    await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
-
+                # Rispondi in base alla verifica della missione
+                if completato:
+                    # Aggiungi la missione come completata
+                    supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
+                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+                else:
+                    await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+            except Exception as e:
+                logging.error(f"Errore durante la verifica della missione: {e}")
+                await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
 
 # Funzione per recuperare i punti dell'utente
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -200,7 +198,6 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
-
 # Funzione per creare missioni
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
@@ -212,18 +209,7 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await update.message.reply_text(
             "❌ Usa il formato: /crea_missione <tipo> <url>\n"
-            "Esempio corretto: /crea_missione like https://www.instagram.com/p/xxxxxx",
-            reply_markup=MAIN_MENU
-        )
-        return
-
-    tipo = context.args[0].lower()
-    url = context.args[1]
-
-    if tipo not in ["like", "comment", "follow"]:
-        await update.message.reply_text(
-            "❌ Tipo non valido. Usa: like, comment, or follow.\n"
-            "Esempio corretto: /crea_missione like https://www.instagram.com/p/xxxxxx",
+            "Esempio corretto: /crea_missione like https://www.instagram.com/p/abc123/",
             reply_markup=MAIN_MENU
         )
         return

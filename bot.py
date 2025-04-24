@@ -116,23 +116,22 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
             return
         
+        # Se il comando è eseguito nel gruppo, rispondi in privato una sola volta
+        if not is_private_chat:
+            await update.message.reply_text("🔔 Ti ho inviato le missioni in chat privata.", reply_markup=MAIN_MENU)
+
         # Ciclo per inviare tutte le missioni
         for m in missioni:
             tipo = m['tipo']
             url = m['url']
             testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
-
-            # Se il comando è eseguito nel gruppo, rispondi in privato
-            if not is_private_chat:
-                await update.message.reply_text("🔔 Ti ho inviato le missioni in chat privata.", reply_markup=MAIN_MENU)
-
+            
             # Invia il messaggio in chat privata
             await context.bot.send_message(chat_id=telegram_id, text=testo)
-                
+
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
-
 
 
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):

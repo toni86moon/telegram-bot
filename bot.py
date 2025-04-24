@@ -100,10 +100,8 @@ async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
-        # Verifica se l'utente è nel gruppo o nella chat privata
-        is_private_chat = update.message.chat.type == 'private'  # Verifica se è chat privata
+        is_private_chat = update.message.chat.type == 'private'
 
-        # Filtro missioni da completare
         completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
         completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
 
@@ -116,17 +114,13 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
             return
         
-        # Se il comando è eseguito nel gruppo, rispondi in privato una sola volta
         if not is_private_chat:
             await update.message.reply_text("🔔 Ti ho inviato le missioni in chat privata.", reply_markup=MAIN_MENU)
 
-        # Ciclo per inviare tutte le missioni
         for m in missioni:
             tipo = m['tipo']
             url = m['url']
             testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
-            
-            # Invia il messaggio in chat privata
             await context.bot.send_message(chat_id=telegram_id, text=testo)
 
     except Exception as e:
@@ -148,7 +142,6 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⏳ Non ci sono missioni attive da verificare.", reply_markup=MAIN_MENU)
             return
 
-        # Verifica le missioni
         for missione in missioni:
             tipo = missione['tipo']
             url = missione['url']
@@ -156,24 +149,15 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(testo, reply_markup=MAIN_MENU)
 
             try:
-                # Estrae l'ID del post dall'URL
                 shortcode = urlparse(url).path.split('/')[-2]
-                
-                # Usa il shortcode per ottenere il post
                 post = instaloader.Post.from_shortcode(L.context, shortcode)
-                
-                # Ottieni lo username Instagram dall'utente
                 username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data
                 if not username_instagram:
                     raise Exception("Username Instagram non trovato per questo utente.")
                 username_instagram = username_instagram[0]["username_instagram"]
-                
-                # Verifica se la missione è completata
                 completato = verifica_missione_completata(tipo, username_instagram, post)
 
-                # Rispondi in base alla verifica della missione
                 if completato:
-                    # Aggiungi la missione come completata
                     supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
                     await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
                 else:
@@ -182,26 +166,20 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Errore durante la verifica della missione: {e}")
                 await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
 
-# Funzione per recuperare i punti dell'utente
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
-        # Recupera i punti dell'utente
         punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data
         if not punti:
             raise Exception("Punti non trovati per l'utente.")
         punti = punti[0]["punti"]
-        
-        # Rispondi con il numero di punti
         await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
-# Funzione per creare missioni
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
-
     if telegram_id != ADMIN_ID:
         await update.message.reply_text("❌ Solo l'amministratore può creare missioni.", reply_markup=MAIN_MENU)
         return
@@ -217,27 +195,21 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tipo = context.args[0].lower()
     url = context.args[1]
     try:
-        # Inserisce la missione nel database Supabase
         supabase.table("missioni").insert({"tipo": tipo, "url": url, "attiva": True}).execute()
         await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo.", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante la creazione della missione: {e}")
         await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.")
 
-# Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Aggiungi i gestori dei comandi
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("insta", insta))
     app.add_handler(CommandHandler("missione", missione))
     app.add_handler(CommandHandler("punti", punti))
     app.add_handler(CommandHandler("verifica", verifica))
-    app.add_handler(CommandHandler("crea_missione", crea_missione))  # Nuovo comando per creare missione
-
-    # Avvia il webhook
+    app.add_handler(CommandHandler("crea_missione", crea_missione))
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,

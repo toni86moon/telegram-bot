@@ -1,8 +1,7 @@
 import os
 import logging
-import instaloader
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from supabase import create_client, Client
 
 # Logging
@@ -27,13 +26,64 @@ if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
 # Supabase setup
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
+# Stati per il comando aggiungi_missione
+TIPO, URL = range(2)
+
 # Menu
 MAIN_MENU = ReplyKeyboardMarkup([
     ["/missione", "/verifica"],
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
-# Comandi del bot
+# Funzione per aggiungere una missione
+async def aggiungi_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+
+    # Verifica se l'utente è l'amministratore
+    if telegram_id != ADMIN_ID:
+        await update.message.reply_text("❌ Solo l'amministratore può aggiungere missioni.")
+        return ConversationHandler.END
+
+    await update.message.reply_text("Inserisci il tipo di missione (like, comment, follow):")
+    return TIPO
+
+async def ricevi_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tipo = update.message.text.lower()
+
+    # Verifica il tipo di missione
+    if tipo not in ["like", "comment", "follow"]:
+        await update.message.reply_text("❌ Tipo non valido. Usa: like, comment, o follow.")
+        return TIPO
+
+    # Memorizza il tipo di missione nel contesto
+    context.user_data["tipo"] = tipo
+    await update.message.reply_text("Ora inserisci l'URL del post Instagram:")
+    return URL
+
+async def ricevi_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text.strip()
+    tipo = context.user_data["tipo"]
+
+    # Inserisci la missione nel database
+    try:
+        supabase.table("missioni").insert({
+            "tipo": tipo,
+            "url": url,
+            "attiva": True
+        }).execute()
+
+        await update.message.reply_text(f"✅ Missione aggiunta con successo:\nTipo: {tipo}\nURL: {url}", reply_markup=MAIN_MENU)
+    except Exception as e:
+        logging.error(f"Errore durante l'aggiunta della missione: {e}")
+        await update.message.reply_text("⚠️ Si è verificato un errore durante l'aggiunta della missione. Riprova più tardi.")
+
+    return ConversationHandler.END
+
+async def annulla(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Operazione annullata.", reply_markup=MAIN_MENU)
+    return ConversationHandler.END
+
+# Altri comandi del bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
@@ -56,121 +106,31 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start - Registrazione\n"
         "/insta <username> - Collega Instagram\n"
         "/missione [tipo] - Ricevi una missione (like, comment, follow)\n"
+        "/aggiungi_missione - Aggiungi una nuova missione (solo admin)\n"
         "/verifica - Verifica completamento\n"
         "/punti - Punti attuali\n"
         "/getlink - Ottieni il tuo link referral",
         reply_markup=MAIN_MENU
     )
 
-async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    if len(context.args) != 1:
-        await update.message.reply_text("❌ Usa /insta tuo_username", reply_markup=MAIN_MENU)
-        return
-    try:
-        supabase.table("utenti").update({"username_instagram": context.args[0]}).eq("telegram_id", telegram_id).execute()
-        await update.message.reply_text(f"✅ Username Instagram impostato: {context.args[0]}", reply_markup=MAIN_MENU)
-    except Exception as e:
-        logging.error(f"Errore durante l'aggiornamento dell'username Instagram: {e}")
-        await update.message.reply_text("⚠️ Errore durante l'aggiornamento dell'username. Riprova più tardi.")
-
-async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    try:
-        # Verifica iscrizione al canale
-        member = await context.bot.get_chat_member(chat_id=CANAL_TELEGRAM_ID, user_id=telegram_id)
-        if member.status not in ["member", "administrator", "creator"]:
-            await update.message.reply_text("🔒 Per ricevere missioni devi iscriverti al canale prima.")
-            return
-    except Exception as e:
-        logging.error(f"Errore nel controllo iscrizione canale: {e}")
-        await update.message.reply_text("⚠️ Non riesco a verificare se sei iscritto al canale. Riprova più tardi.")
-        return
-
-    filtro = {}
-    if context.args:
-        tipo = context.args[0].lower()
-        if tipo not in ["like", "comment", "follow"]:
-            await update.message.reply_text("❌ Tipo non valido. Usa: /missione like, /missione comment, o /missione follow.", reply_markup=MAIN_MENU)
-            return
-        filtro = {"tipo": tipo}
-
-    try:
-        completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
-        completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
-
-        mission_query = supabase.table("missioni").select("*").eq("attiva", True)
-        if filtro:
-            mission_query = mission_query.eq("tipo", filtro["tipo"])
-        if completate_ids:
-            mission_query = mission_query.notin_("id", completate_ids)
-        mission = mission_query.limit(1).execute()
-
-        if not mission.data:
-            await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
-            return
-
-        m = mission.data[0]
-        mission_id = m['id']
-        tipo = m['tipo']
-        url = m['url']
-
-        supabase.table("log_attivita").insert({
-            "telegram_id": telegram_id,
-            "mission_id": mission_id,
-            "evento": "assegnazione_missione",
-            "descrizione": f"Missione assegnata: {tipo} - {url}"
-        }).execute()
-
-        testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
-        await context.bot.send_message(chat_id=telegram_id, text=testo)
-    except Exception as e:
-        logging.error(f"Errore durante il recupero delle missioni: {e}")
-        await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
-
-async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-
-    try:
-        log = supabase.table("log_attivita").select("*").eq("telegram_id", telegram_id).execute().data
-        if not log:
-            await update.message.reply_text("🔍 Non ci sono missioni da verificare.", reply_markup=MAIN_MENU)
-            return
-
-        completate_ids = [l["mission_id"] for l in log if "mission_id" in l]
-        for mission_id in completate_ids:
-            mission = supabase.table("missioni").select("*").eq("id", mission_id).execute().data
-            if mission:
-                tipo = mission[0]["tipo"]
-                url = mission[0]["url"]
-                await update.message.reply_text(f"✅ Missione completata: {tipo} {url}", reply_markup=MAIN_MENU)
-                return
-
-        await update.message.reply_text("⚠️ Nessuna missione completata trovata.", reply_markup=MAIN_MENU)
-    except Exception as e:
-        logging.error(f"Errore durante la verifica della missione: {e}")
-        await update.message.reply_text("⚠️ Si è verificato un errore durante la verifica. Riprova più tardi.")
-
-async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    try:
-        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
-        await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
-    except Exception as e:
-        logging.error(f"Errore durante il recupero dei punti: {e}")
-        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
-
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Gestore per aggiungere missioni
+    aggiungi_missione_handler = ConversationHandler(
+        entry_points=[CommandHandler("aggiungi_missione", aggiungi_missione)],
+        states={
+            TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_tipo)],
+            URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_url)],
+        },
+        fallbacks=[CommandHandler("annulla", annulla)],
+    )
+
     # Aggiungi i gestori dei comandi
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("insta", insta))
-    app.add_handler(CommandHandler("missione", missione))
-    app.add_handler(CommandHandler("verifica", verifica))
-    app.add_handler(CommandHandler("punti", punti))
+    app.add_handler(aggiungi_missione_handler)
 
     # Avvia il webhook
     app.run_webhook(
@@ -181,7 +141,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 

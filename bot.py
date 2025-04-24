@@ -35,6 +35,20 @@ MAIN_MENU = ReplyKeyboardMarkup([
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
+# Funzione per visualizzare missioni
+async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    try:
+        missioni = supabase.table("missioni").select("*").eq("attiva", True).execute().data
+        if not missioni:
+            await update.message.reply_text("⏳ Nessuna missione disponibile al momento.")
+            return
+        missione = missioni[0]
+        await update.message.reply_text(f"🔔 Missione: {missione['tipo']} - {missione['url']}")
+    except Exception as e:
+        logging.error(f"Errore durante il recupero delle missioni: {e}")
+        await update.message.reply_text("⚠️ Errore durante il recupero delle missioni.")
+
 # Funzione per aggiungere una missione
 async def aggiungi_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
@@ -78,7 +92,7 @@ async def ricevi_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Missione aggiunta con successo:\nTipo: {tipo}\nURL: {url}", reply_markup=MAIN_MENU)
 
         # Crea i pulsanti per la notifica
-        keyboard = InlineKeyboardMarkup([
+        keyboard = InlineKeyboardMarkup([ 
             [InlineKeyboardButton("✅ Accetta missione", callback_data=f"accetta_{missione_id}")]
         ])
 
@@ -162,7 +176,7 @@ def main():
 
     # Aggiungi i gestori dei comandi
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("missione", missione))
+    app.add_handler(CommandHandler("missione", missione))  # Comando missione
     app.add_handler(CommandHandler("punti", punti))
     app.add_handler(CommandHandler("verifica", verifica))
     app.add_handler(CommandHandler("getlink", getlink))
@@ -179,6 +193,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 

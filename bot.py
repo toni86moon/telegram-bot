@@ -29,10 +29,9 @@ WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY", "").strip()
 WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 
 # Verifica variabili ambiente
-if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
+if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY]):
     raise ValueError("Variabili d'ambiente mancanti o errate.")
 
 # Supabase setup
@@ -42,8 +41,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 L = instaloader.Instaloader()
 
 # Menu principale
-MAIN_MENU = ReplyKeyboardMarkup([
-    ["/missione", "/verifica"],
+MAIN_MENU = ReplyKeyboardMarkup([ 
+    ["/missione", "/verifica"], 
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
@@ -127,36 +126,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Webhook
 async def set_webhook(application):
-    await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    webhook_url = os.getenv("WEBHOOK_URL", "").strip()
+    if webhook_url:
+        await application.bot.set_webhook(url=webhook_url)
+    else:
+        logging.error("URL Webhook non configurato!")
 
-# Healthcheck route (per evitare errore 502 su Render)
-async def handle_healthcheck(request):
-    return web.Response(text="OK")
-
-# Main async
+# Main
 async def main():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("aggiungi_missione", aggiungi_missione))
     application.add_handler(CommandHandler("verifica", verifica))
 
-    # Imposta Webhook
-    await set_webhook(application)
-
-    # Webhook server + healthcheck con aiohttp
-    runner = web.AppRunner(application.web_app)
+    # Run the webhook (using aiohttp for Render)
+    runner = web.AppRunner(application)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", int(os.getenv("PORT", "5000")))
-    application.web_app.router.add_get("/", handle_healthcheck)
     await site.start()
 
-    logging.info("Bot avviato via webhook su Render.")
-    await application.start()
-    await application.updater.start_polling()  # Non strettamente necessario ma utile in fallback
-    await application.updater.idle()
+    # Keep the app running
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == '__main__':
     asyncio.run(main())

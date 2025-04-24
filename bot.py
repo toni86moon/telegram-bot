@@ -83,7 +83,7 @@ async def annulla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Operazione annullata.", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
-# Altri comandi del bot
+# Comandi esistenti ripristinati
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
@@ -100,16 +100,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante la registrazione dell'utente: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore. Riprova più tardi.")
 
+async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    try:
+        missioni = supabase.table("missioni").select("*").eq("attiva", True).execute().data
+        if not missioni:
+            await update.message.reply_text("⏳ Nessuna missione disponibile al momento.")
+            return
+        missione = missioni[0]
+        await update.message.reply_text(f"🔔 Missione: {missione['tipo']} - {missione['url']}")
+    except Exception as e:
+        logging.error(f"Errore durante il recupero delle missioni: {e}")
+        await update.message.reply_text("⚠️ Errore durante il recupero delle missioni.")
+
+async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    try:
+        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
+        await update.message.reply_text(f"🎯 Hai {punti} punti!")
+    except Exception as e:
+        logging.error(f"Errore durante il recupero dei punti: {e}")
+        await update.message.reply_text("⚠️ Errore durante il recupero dei punti.")
+
+async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 Funzionalità di verifica non ancora implementata.")
+
+async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔗 Funzionalità di getlink non ancora implementata.")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Comandi:\n"
         "/start - Registrazione\n"
-        "/insta <username> - Collega Instagram\n"
-        "/missione [tipo] - Ricevi una missione (like, comment, follow)\n"
-        "/aggiungi_missione - Aggiungi una nuova missione (solo admin)\n"
-        "/verifica - Verifica completamento\n"
-        "/punti - Punti attuali\n"
-        "/getlink - Ottieni il tuo link referral",
+        "/missione - Ricevi una missione\n"
+        "/punti - Visualizza i tuoi punti\n"
+        "/verifica - Verifica il completamento della missione\n"
+        "/getlink - Ottieni il tuo link referral\n"
+        "/aggiungi_missione - Aggiungi una missione (solo admin)",
         reply_markup=MAIN_MENU
     )
 
@@ -129,6 +156,10 @@ def main():
 
     # Aggiungi i gestori dei comandi
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("missione", missione))
+    app.add_handler(CommandHandler("punti", punti))
+    app.add_handler(CommandHandler("verifica", verifica))
+    app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(aggiungi_missione_handler)
 

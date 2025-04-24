@@ -1,7 +1,7 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
 from supabase import create_client, Client
 
 # Logging
@@ -30,8 +30,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 TIPO, URL = range(2)
 
 # Menu
-MAIN_MENU = ReplyKeyboardMarkup([
-    ["/missione", "/verifica"],
+MAIN_MENU = ReplyKeyboardMarkup([ 
+    ["/missione", "/verifica"], 
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
@@ -64,15 +64,32 @@ async def ricevi_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
     tipo = context.user_data["tipo"]
 
-    # Inserisci la missione nel database
     try:
-        supabase.table("missioni").insert({
+        # Inserisci la missione nel database
+        response = supabase.table("missioni").insert({
             "tipo": tipo,
             "url": url,
             "attiva": True
         }).execute()
 
+        missione_id = response.data[0]["id"]
+
+        # Conferma all'amministratore
         await update.message.reply_text(f"✅ Missione aggiunta con successo:\nTipo: {tipo}\nURL: {url}", reply_markup=MAIN_MENU)
+
+        # Crea i pulsanti per la notifica
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Accetta missione", callback_data=f"accetta_{missione_id}")]
+        ])
+
+        # Invia al gruppo
+        await context.bot.send_message(
+            chat_id=CANAL_TELEGRAM_ID,
+            text=f"🚀 *Nuova missione disponibile!*\n\n📌 Tipo: *{tipo}*\n🔗 URL: {url}",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+
     except Exception as e:
         logging.error(f"Errore durante l'aggiunta della missione: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore durante l'aggiunta della missione. Riprova più tardi.")
@@ -82,6 +99,37 @@ async def ricevi_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def annulla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Operazione annullata.", reply_markup=MAIN_MENU)
     return ConversationHandler.END
+
+# Funzione di callback per accettare la missione
+async def accetta_missione_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    username = query.from_user.username
+    data = query.data
+
+    if not data.startswith("accetta_"):
+        return
+
+    missione_id = int(data.split("_")[1])
+
+    try:
+        # Salva accettazione missione
+        supabase.table("accettazioni").insert({
+            "user_id": user_id,
+            "username": username,
+            "missione_id": missione_id
+        }).execute()
+
+        await query.edit_message_reply_markup(None)
+        await query.message.reply_text(
+            f"🎯 @{username}, hai accettato la missione #{missione_id}! Buon lavoro! 💪"
+        )
+
+    except Exception as e:
+        logging.error(f"Errore accettazione missione: {e}")
+        await query.message.reply_text("⚠️ Errore durante l'accettazione della missione.")
 
 # Comandi esistenti ripristinati
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,46 +148,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante la registrazione dell'utente: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore. Riprova più tardi.")
 
-async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    try:
-        missioni = supabase.table("missioni").select("*").eq("attiva", True).execute().data
-        if not missioni:
-            await update.message.reply_text("⏳ Nessuna missione disponibile al momento.")
-            return
-        missione = missioni[0]
-        await update.message.reply_text(f"🔔 Missione: {missione['tipo']} - {missione['url']}")
-    except Exception as e:
-        logging.error(f"Errore durante il recupero delle missioni: {e}")
-        await update.message.reply_text("⚠️ Errore durante il recupero delle missioni.")
-
-async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    try:
-        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
-        await update.message.reply_text(f"🎯 Hai {punti} punti!")
-    except Exception as e:
-        logging.error(f"Errore durante il recupero dei punti: {e}")
-        await update.message.reply_text("⚠️ Errore durante il recupero dei punti.")
-
-async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔎 Funzionalità di verifica non ancora implementata.")
-
-async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔗 Funzionalità di getlink non ancora implementata.")
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Comandi:\n"
-        "/start - Registrazione\n"
-        "/missione - Ricevi una missione\n"
-        "/punti - Visualizza i tuoi punti\n"
-        "/verifica - Verifica il completamento della missione\n"
-        "/getlink - Ottieni il tuo link referral\n"
-        "/aggiungi_missione - Aggiungi una missione (solo admin)",
-        reply_markup=MAIN_MENU
-    )
-
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -147,10 +155,8 @@ def main():
     # Gestore per aggiungere missioni
     aggiungi_missione_handler = ConversationHandler(
         entry_points=[CommandHandler("aggiungi_missione", aggiungi_missione)],
-        states={
-            TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_tipo)],
-            URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_url)],
-        },
+        states={TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_tipo)],
+                URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_url)]},
         fallbacks=[CommandHandler("annulla", annulla)],
     )
 
@@ -162,6 +168,7 @@ def main():
     app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(aggiungi_missione_handler)
+    app.add_handler(CallbackQueryHandler(accetta_missione_callback))
 
     # Avvia il webhook
     app.run_webhook(
@@ -172,6 +179,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 

@@ -154,13 +154,24 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             testo = f"🔍 Sto verificando la missione: {tipo.upper()} il post {url}..."
             await update.message.reply_text(testo, reply_markup=MAIN_MENU)
 
-            # Usa Instaloader per verificare se l'utente ha completato la missione
+           # Usa Instaloader per verificare se l'utente ha completato la missione
 try:
-    shortcode = urlparse(url).path.split('/')[-2]  # Estrae l'ID del post dall'URL
-    post = instaloader.Post.from_shortcode(L.context, shortcode)  # Usa il shortcode per ottenere il post
-    username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
+    # Estrae l'ID del post dall'URL
+    shortcode = urlparse(url).path.split('/')[-2]
+    
+    # Usa il shortcode per ottenere il post
+    post = instaloader.Post.from_shortcode(L.context, shortcode)
+    
+    # Ottieni lo username Instagram dall'utente
+    username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data
+    if not username_instagram:
+        raise Exception("Username Instagram non trovato per questo utente.")
+    username_instagram = username_instagram[0]["username_instagram"]
+    
+    # Verifica se la missione è completata
     completato = verifica_missione_completata(tipo, username_instagram, post)
 
+    # Rispondi in base alla verifica della missione
     if completato:
         # Aggiungi la missione come completata
         supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
@@ -173,15 +184,22 @@ except Exception as e:
     await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
 
 
-
+# Funzione per recuperare i punti dell'utente
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
-        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data[0]["punti"]
+        # Recupera i punti dell'utente
+        punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data
+        if not punti:
+            raise Exception("Punti non trovati per l'utente.")
+        punti = punti[0]["punti"]
+        
+        # Rispondi con il numero di punti
         await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
+
 
 # Funzione per creare missioni
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):

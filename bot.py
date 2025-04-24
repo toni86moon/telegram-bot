@@ -26,6 +26,10 @@ PORT = int(os.getenv("PORT", "8443").strip())
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
 
+# Instaloader credentials from environment
+INSTAGRAM_USERNAME = os.getenv("INSTAGRAM_USERNAME", "").strip()
+INSTAGRAM_PASSWORD = os.getenv("INSTAGRAM_PASSWORD", "").strip()
+
 # Verifica che tutte le variabili siano configurate
 if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
     raise ValueError("Alcune variabili d'ambiente sono mancanti o non configurate correttamente.")
@@ -35,6 +39,17 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 # Instaloader setup
 L = instaloader.Instaloader()
+
+# Login su Instagram
+try:
+    L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)  # Login con username e password
+    logging.info("Login su Instagram effettuato con successo!")
+except instaloader.exceptions.BadCredentialsException:
+    logging.error("Credenziali Instagram errate.")
+    raise
+except Exception as e:
+    logging.error(f"Errore durante il login su Instagram: {e}")
+    raise
 
 # Menu
 MAIN_MENU = ReplyKeyboardMarkup([ 

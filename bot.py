@@ -149,46 +149,38 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Errore durante il recupero dei punti: {e}")
         await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
-# Funzione per creare una missione
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
-    
-    # Verifica se l'utente è l'amministratore
+
     if telegram_id != ADMIN_ID:
-        await update.message.reply_text("❌ Solo l'amministratore può creare missioni.")
+        await update.message.reply_text("❌ Solo l'amministratore può creare missioni.", reply_markup=MAIN_MENU)
         return
-    
-    if len(context.args) != 2:
-        await update.message.reply_text("❌ Usa il formato: /crea_missione <tipo> <url>")
+
+    if len(context.args) < 2:
+        await update.message.reply_text("❌ Usa il formato: /crea_missione <tipo> <url>", reply_markup=MAIN_MENU)
         return
 
     tipo = context.args[0].lower()
     url = context.args[1]
 
-    # Controlla che il tipo di missione sia valido
     if tipo not in ["like", "comment", "follow"]:
-        await update.message.reply_text("❌ Tipo di missione non valido. Usa: like, comment, follow.")
+        await update.message.reply_text("❌ Tipo non valido. Usa: like, comment, or follow.", reply_markup=MAIN_MENU)
         return
 
-    # Aggiungi la missione nel database
     try:
-        # Aggiungi la missione a Supabase
-        mission_data = {
+        data_creazione = datetime.now().isoformat()  # Converte la data in formato ISO 8601
+        missione = {
             "tipo": tipo,
             "url": url,
             "attiva": True,
-            "data_creazione": datetime.now()
+            "data_creazione": data_creazione
         }
-        supabase.table("missioni").insert(mission_data).execute()
 
-        # Invia notifica a tutti gli utenti nel gruppo
-        message = f"🔔 Nuova missione disponibile: {tipo.upper()} il post: {url}\nEsegui la missione e usa /verifica per completarla!"
-        await context.bot.send_message(chat_id=CANAL_TELEGRAM_ID, text=message)
-
-        await update.message.reply_text(f"✅ Missione {tipo.upper()} creata con successo! URL: {url}")
+        supabase.table("missioni").insert(missione).execute()
+        await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo: {url}", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante la creazione della missione: {e}")
-        await update.message.reply_text("⚠️ Si è verificato un errore durante la creazione della missione. Riprova più tardi.")
+        await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.", reply_markup=MAIN_MENU)
 
 # Funzione principale con Webhook
 def main():
@@ -200,7 +192,7 @@ def main():
     app.add_handler(CommandHandler("insta", insta))
     app.add_handler(CommandHandler("missione", missione))
     app.add_handler(CommandHandler("punti", punti))
-    app.add_handler(CommandHandler("crea_missione", crea_missione))  # Aggiunto il nuovo comando
+    app.add_handler(CommandHandler("crea_missione", crea_missione))  # Nuovo comando per creare missione
 
     # Avvia il webhook
     app.run_webhook(

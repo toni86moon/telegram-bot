@@ -194,7 +194,7 @@ async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante il recupero dei punti: {e}")
-        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi."))
+        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
 
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id

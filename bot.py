@@ -157,16 +157,19 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Usa Instaloader per verificare se l'utente ha completato la missione
             try:
-                post = L.get_post_from_url(url)
-                username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
-                completato = verifica_missione_completata(tipo, username_instagram, post)
+                try:
+    shortcode = urlparse(url).path.split('/')[-2]  # Estrae l'ID del post dall'URL
+    post = instaloader.Post.from_shortcode(L.context, shortcode)  # Correzione per ottenere il post
+    username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
+    completato = verifica_missione_completata(tipo, username_instagram, post)
 
-                if completato:
-                    # Aggiungi la missione come completata
-                    supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
-                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-                else:
-                    await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+    if completato:
+        # Aggiungi la missione come completata
+        supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
+        await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+    else:
+        await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+
 
             except Exception as e:
                 logging.error(f"Errore durante la verifica della missione: {e}")

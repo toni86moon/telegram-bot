@@ -37,7 +37,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 L = instaloader.Instaloader()
 
 # Menu
-MAIN_MENU = ReplyKeyboardMarkup([
+MAIN_MENU = ReplyKeyboardMarkup([ 
     ["/missione", "/verifica"],
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
@@ -132,6 +132,7 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
+
 async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
@@ -223,10 +224,28 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         supabase.table("missioni").insert(missione).execute()
-        await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo: {url}", reply_markup=MAIN_MENU)
+        await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo!", reply_markup=MAIN_MENU)
     except Exception as e:
-        logging.error(f"Errore durante la creazione della missione: {e}")
-        await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.", reply_markup=MAIN_MENU)
+        logging.error(f"Errore nella creazione della missione: {e}")
+        await update.message.reply_text("⚠️ Errore nella creazione della missione. Riprova più tardi.", reply_markup=MAIN_MENU)
+
+# Avvia il bot
+def run_bot():
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("insta", insta))
+    application.add_handler(CommandHandler("missione", missione))
+    application.add_handler(CommandHandler("verifica", verifica))
+    application.add_handler(CommandHandler("punti", punti))
+    application.add_handler(CommandHandler("crea_missione", crea_missione))
+
+    application.run_polling()
+
+if __name__ == "__main__":
+    run_bot()
+
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()

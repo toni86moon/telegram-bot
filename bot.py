@@ -99,38 +99,15 @@ async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
-    chat_type = update.effective_chat.type
-
-    # Verifica che il comando venga usato in chat privata
-    if chat_type != "private":
-        await update.message.reply_text("❗ Per ricevere missioni usa questo comando in chat privata.")
-        return
-
     try:
-        member = await context.bot.get_chat_member(chat_id=CANAL_TELEGRAM_ID, user_id=telegram_id)
-        if member.status not in ["member", "administrator", "creator"]:
-            await update.message.reply_text("🔒 Per ricevere missioni devi iscriverti al canale prima.")
-            return
-    except Exception as e:
-        logging.error(f"Errore nel controllo iscrizione canale: {e}")
-        await update.message.reply_text("⚠️ Non riesco a verificare se sei iscritto al canale. Riprova più tardi.")
-        return
+        # Verifica se l'utente è nel gruppo o nella chat privata
+        is_private_chat = update.message.chat.type == 'private'  # Verifica se è chat privata
 
-    filtro = {}
-    if context.args:
-        tipo = context.args[0].lower()
-        if tipo not in ["like", "comment", "follow"]:
-            await update.message.reply_text("❌ Tipo non valido. Usa: /missione like, /missione comment, o /missione follow.", reply_markup=MAIN_MENU)
-            return
-        filtro = {"tipo": tipo}
-
-    try:
+        # Filtro missioni da completare
         completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
         completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
 
         mission_query = supabase.table("missioni").select("*").eq("attiva", True)
-        if filtro:
-            mission_query = mission_query.eq("tipo", filtro["tipo"])
         if completate_ids:
             mission_query = mission_query.notin_("id", completate_ids)
         missioni = mission_query.execute().data
@@ -138,16 +115,24 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not missioni:
             await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
             return
-
+        
+        # Ciclo per inviare tutte le missioni
         for m in missioni:
             tipo = m['tipo']
             url = m['url']
-            testo = f"🔔 Missione: {tipo.upper()} il post:\n{url}\n✅ Dopo aver eseguito, usa /verifica"
-            await context.bot.send_message(chat_id=telegram_id, text=testo)
+            testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
 
+            # Se il comando è eseguito nel gruppo, rispondi in privato
+            if not is_private_chat:
+                await update.message.reply_text("🔔 Ti ho inviato le missioni in chat privata.", reply_markup=MAIN_MENU)
+
+            # Invia il messaggio in chat privata
+            await context.bot.send_message(chat_id=telegram_id, text=testo)
+                
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
+
 
 
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):

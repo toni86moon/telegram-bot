@@ -1,36 +1,42 @@
 import os
 import logging
 import instaloader
+import requests
+from urllib.parse import urlparse
+from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from supabase import create_client, Client
 
-# Configurazione logging
+# Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Variabili d'ambiente
+# Env Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_ID = int(os.getenv("TUO_TELEGRAM_ID_ADMIN", "0").strip())
 CANAL_TELEGRAM_ID = os.getenv("CANAL_TELEGRAM_ID", "").strip()
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
+WOOCOMMERCE_URL = os.getenv("WOOCOMMERCE_API_URL", "").strip()
+WOOCOMMERCE_KEY = os.getenv("WOOCOMMERCE_KEY", "").strip()
+WOOCOMMERCE_SECRET = os.getenv("WOOCOMMERCE_SECRET", "").strip()
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 PORT = int(os.getenv("PORT", "8443").strip())
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
 
-# Verifica delle variabili d'ambiente
+# Verifica che tutte le variabili siano configurate
 if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY, WEBHOOK_URL]):
     raise ValueError("Alcune variabili d'ambiente sono mancanti o non configurate correttamente.")
 
-# Configurazione Supabase
+# Supabase setup
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
-# Instaloader Setup
+# Instaloader setup
 L = instaloader.Instaloader()
 
-# Menu Principale
+# Menu
 MAIN_MENU = ReplyKeyboardMarkup([
     ["/missione", "/verifica"],
     ["/punti", "/getlink", "/help"]
@@ -158,11 +164,10 @@ def main():
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=WEBHOOK_URL + "/" + BOT_TOKEN
+        webhook_url=WEBHOOK_URL
     )
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 
 

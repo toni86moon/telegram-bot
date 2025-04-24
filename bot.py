@@ -99,6 +99,13 @@ async def insta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
+    chat_type = update.effective_chat.type
+
+    # Verifica che il comando venga usato in chat privata
+    if chat_type != "private":
+        await update.message.reply_text("❗ Per ricevere missioni usa questo comando in chat privata.")
+        return
+
     try:
         member = await context.bot.get_chat_member(chat_id=CANAL_TELEGRAM_ID, user_id=telegram_id)
         if member.status not in ["member", "administrator", "creator"]:
@@ -126,19 +133,22 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             mission_query = mission_query.eq("tipo", filtro["tipo"])
         if completate_ids:
             mission_query = mission_query.notin_("id", completate_ids)
-        mission = mission_query.limit(1).execute()
+        missioni = mission_query.execute().data
 
-        if not mission.data:
+        if not missioni:
             await update.message.reply_text("⏳ Nessuna missione disponibile al momento.", reply_markup=MAIN_MENU)
             return
-        m = mission.data[0]
-        tipo = m['tipo']
-        url = m['url']
-        testo = f"🔔 Missione: {tipo.upper()} il post: {url}\nDopo aver eseguito, usa /verifica"
-        await context.bot.send_message(chat_id=telegram_id, text=testo)
+
+        for m in missioni:
+            tipo = m['tipo']
+            url = m['url']
+            testo = f"🔔 Missione: {tipo.upper()} il post:\n{url}\n✅ Dopo aver eseguito, usa /verifica"
+            await context.bot.send_message(chat_id=telegram_id, text=testo)
+
     except Exception as e:
         logging.error(f"Errore durante il recupero delle missioni: {e}")
         await update.message.reply_text("⚠️ Si è verificato un errore nel recupero delle missioni. Riprova più tardi.")
+
 
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id

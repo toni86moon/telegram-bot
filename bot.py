@@ -156,10 +156,9 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(testo, reply_markup=MAIN_MENU)
 
             # Usa Instaloader per verificare se l'utente ha completato la missione
-            try:
-                try:
+           try:
     shortcode = urlparse(url).path.split('/')[-2]  # Estrae l'ID del post dall'URL
-    post = instaloader.Post.from_shortcode(L.context, shortcode)  # Correzione per ottenere il post
+    post = instaloader.Post.from_shortcode(L.context, shortcode)  # Usa il shortcode per ottenere il post
     username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data[0]["username_instagram"]
     completato = verifica_missione_completata(tipo, username_instagram, post)
 
@@ -169,15 +168,6 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
     else:
         await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
-
-
-            except Exception as e:
-                logging.error(f"Errore durante la verifica della missione: {e}")
-                await update.message.reply_text(f"⚠️ Errore nella verifica della missione: {url}. Riprova più tardi.", reply_markup=MAIN_MENU)
-
-    except Exception as e:
-        logging.error(f"Errore durante la verifica delle missioni: {e}")
-        await update.message.reply_text("⚠️ Si è verificato un errore durante la verifica delle missioni. Riprova più tardi.", reply_markup=MAIN_MENU)
 
 
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):

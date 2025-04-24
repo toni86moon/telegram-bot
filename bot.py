@@ -159,7 +159,13 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if completato:
                     supabase.table("log_attivita").insert({"telegram_id": telegram_id, "mission_id": missione["id"]}).execute()
-                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
+                    
+                    # Aggiorna i punti dell'utente
+                    user_data = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data
+                    punti_attuali = user_data[0]["punti"] if user_data else 0
+                    supabase.table("utenti").update({"punti": punti_attuali + 1}).eq("telegram_id", telegram_id).execute()
+                    
+                    await update.message.reply_text(f"✅ Missione completata: {tipo.upper()} il post {url}\n🎉 Hai guadagnato 1 punto!", reply_markup=MAIN_MENU)
                 else:
                     await update.message.reply_text(f"❌ Missione non completata: {tipo.upper()} il post {url}", reply_markup=MAIN_MENU)
             except Exception as e:
@@ -218,7 +224,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 

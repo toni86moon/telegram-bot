@@ -213,7 +213,8 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=MAIN_MENU
         )
         return
-
+ipo = context.args[0].lower()
+    url = context.args[1]
     try:
         data_creazione = datetime.now().isoformat()  # Converte la data in formato ISO 8601
         missione = {
@@ -223,11 +224,14 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "data_creazione": data_creazione
         }
 
-        supabase.table("missioni").insert(missione).execute()
-        await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo: {url}", reply_markup=MAIN_MENU)
+       # Aggiungi la missione nel database
+    try:
+        missione = supabase.table("missioni").insert({"tipo": tipo, "url": url, "attiva": True}).execute()
+        await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo.", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante la creazione della missione: {e}")
-        await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.", reply_markup=MAIN_MENU)
+        await update.message.reply_text("⚠️ Errore durante la creazione della missione. Riprova più tardi.")
+
 # Funzione principale con Webhook
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()

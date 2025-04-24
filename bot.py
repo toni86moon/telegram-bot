@@ -3,7 +3,7 @@ import logging
 import instaloader
 import requests
 from urllib.parse import urlparse
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from supabase import create_client, Client
@@ -213,20 +213,12 @@ async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=MAIN_MENU
         )
         return
-ipo = context.args[0].lower()
+
+    tipo = context.args[0].lower()
     url = context.args[1]
     try:
-        data_creazione = datetime.now().isoformat()  # Converte la data in formato ISO 8601
-        missione = {
-            "tipo": tipo,
-            "url": url,
-            "attiva": True,
-            "data_creazione": data_creazione
-        }
-
-       # Aggiungi la missione nel database
-    try:
-        missione = supabase.table("missioni").insert({"tipo": tipo, "url": url, "attiva": True}).execute()
+        # Inserisce la missione nel database Supabase
+        supabase.table("missioni").insert({"tipo": tipo, "url": url, "attiva": True}).execute()
         await update.message.reply_text(f"✅ Missione '{tipo}' creata con successo.", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante la creazione della missione: {e}")
@@ -251,10 +243,6 @@ def main():
         port=PORT,
         webhook_url=WEBHOOK_URL
     )
-
-if __name__ == '__main__':
-    main()
-
 
 if __name__ == '__main__':
     main()

@@ -172,17 +172,29 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Errore durante la verifica della missione: {e}")
                 await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
 
+# Qualsiasi blocco try incompleto deve essere corretto come segue:
+try:
+    # Codice che potrebbe generare eccezioni
+    pass
+except Exception as e:
+    logging.error(f"Errore: {e}")
+    # Gestisci l'errore o lascia un commento esplicativo
+
+# Correzione della funzione punti
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
+        # Recupera i punti dal database
         punti = supabase.table("utenti").select("punti").eq("telegram_id", telegram_id).execute().data
         if not punti:
             raise Exception("Punti non trovati per l'utente.")
         punti = punti[0]["punti"]
+        
+        # Rispondi con il numero di punti
         await update.message.reply_text(f"🎯 Hai {punti} punti!", reply_markup=MAIN_MENU)
     except Exception as e:
         logging.error(f"Errore durante il recupero dei punti: {e}")
-        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi.")
+        await update.message.reply_text("⚠️ Errore durante il recupero dei punti. Riprova più tardi."))
 
 async def crea_missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id

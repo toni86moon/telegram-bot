@@ -135,7 +135,6 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
-        # Recupera l'utente e le missioni non completate
         completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
         completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
         

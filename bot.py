@@ -130,6 +130,7 @@ async def missione(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     try:
+        # Codice che potrebbe generare eccezioni
         completate = supabase.table("log_attivita").select("mission_id").eq("telegram_id", telegram_id).execute().data
         completate_ids = [x["mission_id"] for x in completate if "mission_id" in x]
         
@@ -176,6 +177,11 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Errore durante la verifica della missione: {e}")
                 await update.message.reply_text("⚠️ Si è verificato un errore nella verifica della missione. Riprova più tardi.")
+
+    except Exception as e:
+        logging.error(f"Errore generale: {e}")
+        await update.message.reply_text("⚠️ Si è verificato un errore. Riprova più tardi.")
+
 
 # Correzione della funzione punti
 async def punti(update: Update, context: ContextTypes.DEFAULT_TYPE):

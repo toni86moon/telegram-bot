@@ -42,6 +42,35 @@ MAIN_MENU = ReplyKeyboardMarkup([
     ["/punti", "/getlink", "/help"]
 ], resize_keyboard=True)
 
+# Funzione per generare un codice sconto tramite WooCommerce
+def genera_codice_sconto(user_id):
+    # Configura l'endpoint delle API WooCommerce
+    url_woocommerce = f"{WOOCOMMERCE_URL}/wp-json/wc/v3/coupons"
+    consumer_key = WOOCOMMERCE_KEY
+    consumer_secret = WOOCOMMERCE_SECRET
+
+    # Crea il codice sconto
+    sconto = 10  # Ad esempio, un 10% di sconto
+    codice_sconto = f"Sconto{user_id}"
+
+    data = {
+        "discount_type": "percent",
+        "amount": sconto,
+        "individual_use": True,
+        "usage_limit": 1,
+        "usage_limit_per_user": 1,
+        "code": codice_sconto
+    }
+
+    # Esegui la richiesta API per creare il codice sconto
+    response = requests.post(url_woocommerce, auth=(consumer_key, consumer_secret), data=data)
+
+    if response.status_code == 201:
+        return codice_sconto
+    else:
+        logging.error(f"Errore nella generazione del codice sconto: {response.text}")
+        return "Errore nel generare il codice sconto"
+
 # Funzione di verifica missione
 def verifica_missione_completata(tipo, username, post):
     try:
@@ -169,6 +198,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 

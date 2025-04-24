@@ -151,6 +151,11 @@ async def verifica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 shortcode = urlparse(url).path.split('/')[-2]
                 post = instaloader.Post.from_shortcode(L.context, shortcode)
+
+                # Verifica se il post è stato correttamente recuperato
+                if not post:
+                    raise Exception("Impossibile recuperare il post da Instagram.")
+                
                 username_instagram = supabase.table("utenti").select("username_instagram").eq("telegram_id", telegram_id).execute().data
                 if not username_instagram:
                     raise Exception("Username Instagram non trovato per questo utente.")

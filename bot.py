@@ -44,7 +44,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 # Instaloader setup
 L = instaloader.Instaloader()
 
- Esegui il login direttamente con le credenziali
+#Esegui il login direttamente con le credenziali
 try:
     # Login con username e password
     L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)

@@ -44,17 +44,23 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 # Instaloader setup
 L = instaloader.Instaloader()
 
-#Esegui il login direttamente con le credenziali
+# Aggiunta del controllo su login Instagram
 try:
     # Login con username e password
     L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
     logging.info("Login su Instagram effettuato con successo!")
 except instaloader.exceptions.BadCredentialsException:
     logging.error("Credenziali Instagram errate.")
-    raise
+    sys.exit(1)
+except instaloader.exceptions.TwoFactorAuthRequiredException:
+    logging.error("Richiesta autenticazione a due fattori. Login non riuscito.")
+    sys.exit(1)
+except instaloader.exceptions.ConnectionException as e:
+    logging.error(f"Errore di connessione: {e}")
+    sys.exit(1)
 except Exception as e:
-    logging.error(f"Errore durante il login su Instagram: {e}")
-    raise
+    logging.error(f"Errore imprevisto: {e}")
+    sys.exit(1)
 
 # Menu
 MAIN_MENU = ReplyKeyboardMarkup([ 
